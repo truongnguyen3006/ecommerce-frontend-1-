@@ -76,7 +76,7 @@ src/
 ## Cách chạy local
 ### 1. Clone project
 ```bash
-git clone <repo-url>
+git clone https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
 cd <project-folder>
 ```
 

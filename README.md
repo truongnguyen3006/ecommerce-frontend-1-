@@ -113,3 +113,9 @@ Lưu ý: Backend cần được khởi động trước để frontend có thể
 - Chưa phải một website thương mại điện tử hoàn chỉnh
 - Giao diện được giữ ở mức đủ dùng để phục vụ kiểm thử luồng đặt hàng và quan sát kết quả
 - Trọng tâm của project nằm ở bài test oversell và xử lý đồng thời ở backend
+
+## Tác giả
+
+- **Tên:** Nguyễn Lâm Trường
+- **Email:** lamtruongnguyen2004@gmail.com
+- **GitHub:** [https://github.com/truongnguyen3006](https://github.com/truongnguyen3006)

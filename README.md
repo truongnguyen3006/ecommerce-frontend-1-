@@ -1,38 +1,44 @@
-# Ecommerce Frontend
+# High-Concurrency Ecommerce Frontend
 
-Frontend cho bài test tải của hệ thống bán hàng. Mục tiêu chính của repo này không phải mô phỏng một website ecommerce đầy đủ tính năng, mà là cung cấp giao diện để chạy và quan sát kịch bản **oversell**: nhiều người cùng truy cập, tranh mua cùng một SKU và đặt hàng gần như đồng thời.
+> Giao diện Next.js cho hệ thống **High-Concurrency Ecommerce Microservices Backend**, phục vụ thao tác mua hàng, quản trị và quan sát kết quả của các luồng checkout.
+
+Frontend này là giao diện đi kèm backend [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-.git). Trọng tâm của toàn bộ project nằm ở xử lý checkout đồng thời, kiểm soát oversell và đánh giá backend dưới tải cao.
+
+> **Lưu ý:** frontend không phải công cụ tạo tải benchmark. Các kịch bản tải đồng thời được chạy bằng **JMeter** ở backend repo. Frontend chủ yếu dùng để thao tác thủ công, kiểm tra dữ liệu và quan sát kết quả sau khi hệ thống xử lý.
 
 ## Chức năng chính
 
 ### Khách hàng
-- Xem danh sách sản phẩm và lọc theo từ khóa, danh mục
-- Xem chi tiết sản phẩm, chọn màu, size và kiểm tra tồn kho theo biến thể
-- Đăng ký, đăng nhập tài khoản
-- Thêm sản phẩm vào giỏ hàng, chỉnh số lượng và đặt hàng, hủy đơn
-- Chọn địa chỉ giao hàng trước khi tạo đơn
-- Chọn phương thức thanh toán COD hoặc VNPAY khi đặt hàng
-- Theo dõi trạng thái đơn hàng qua trang đơn hàng và màn hình chờ xử lý
-- Nhận cập nhật trạng thái đơn hàng theo thời gian thực qua WebSocket
+
+- Xem danh sách sản phẩm và lọc theo từ khóa, danh mục.
+- Xem chi tiết sản phẩm, chọn màu, size và kiểm tra tồn kho theo biến thể.
+- Đăng ký, đăng nhập tài khoản.
+- Thêm sản phẩm vào giỏ hàng, chỉnh số lượng, đặt hàng và hủy đơn.
+- Chọn địa chỉ giao hàng trước khi tạo đơn.
+- Chọn phương thức thanh toán COD hoặc VNPay khi đặt hàng.
+- Theo dõi trạng thái đơn hàng qua trang đơn hàng và màn hình chờ xử lý.
+- Nhận cập nhật trạng thái đơn hàng theo thời gian thực qua WebSocket.
+
 ### Admin
-- Xem dashboard tổng quan với số lượng người dùng, số đơn hàng và doanh thu trong ngày
-- Xem danh sách sản phẩm trong hệ thống
-- Tạo sản phẩm mới, khai báo biến thể theo màu, size, giá, số lượng ban đầu và hình ảnh
-- Chỉnh sửa thông tin sản phẩm và biến thể sản phẩm
-- Xóa sản phẩm
-- Xem danh sách đơn hàng và mở chi tiết từng đơn
-- Xem danh sách người dùng trong hệ thống
-- Khóa hoặc mở khóa tài khoản người dùng
+
+- Xem dashboard tổng quan với số lượng người dùng, đơn hàng và doanh thu trong ngày.
+- Xem danh sách sản phẩm.
+- Tạo sản phẩm mới với biến thể theo màu, size, giá, số lượng ban đầu và hình ảnh.
+- Chỉnh sửa hoặc xóa sản phẩm và biến thể.
+- Xem danh sách và chi tiết đơn hàng.
+- Xem danh sách người dùng.
+- Khóa hoặc mở khóa tài khoản người dùng.
 
 ## Công nghệ sử dụng
 
-- Next.js 16 – xây dựng ứng dụng frontend 
-- React 19 – phát triển giao diện theo component 
-- TypeScript – hỗ trợ kiểm soát kiểu dữ liệu 
-- Ant Design – dựng nhanh các màn hình quản trị và người dùng 
-- TanStack Query – xử lý fetch, cache và đồng bộ dữ liệu 
-- Axios – giao tiếp với REST API 
-- Zustand – lưu state cục bộ như giỏ hàng, phiên làm việc 
-- SockJS / STOMP – cập nhật trạng thái đơn hàng theo thời gian thực
+| Nhóm | Công nghệ |
+|---|---|
+| Framework | Next.js 16, React 19 |
+| Ngôn ngữ | TypeScript |
+| UI | Ant Design |
+| Data fetching | Axios, TanStack Query |
+| State management | Zustand |
+| Realtime | SockJS, STOMP |
 
 ## Cấu trúc chính
 
@@ -49,22 +55,28 @@ src/
 ## Các màn hình chính
 
 ### Trang sản phẩm
-<img src="screenshots/products.png" alt="products" width="1135">
+
+<img src="screenshots/products.png" alt="Product listing page" width="1135">
 
 ### Trang chi tiết sản phẩm
-<img src="screenshots/ProductDetail.png" alt="ProductDetail" width="845">
+
+<img src="screenshots/ProductDetail.png" alt="Product detail page" width="845">
 
 ### Trang giỏ hàng
-<img src="screenshots/Cart.png" alt="Cart" width="848">
+
+<img src="screenshots/Cart.png" alt="Shopping cart page" width="848">
 
 ### Trang đặt hàng
-<img src="screenshots/Checkout.png" alt="Checkout" width="855">
+
+<img src="screenshots/Checkout.png" alt="Checkout page" width="855">
 
 ### Trang đơn hàng của người dùng
-<img src="screenshots/MyOrders.png" alt="MyOrders" width="853">
+
+<img src="screenshots/MyOrders.png" alt="User order history page" width="853">
 
 ### Trang Admin
-<img src="screenshots/Admin.png" alt="Admin" width="1899">
+
+<img src="screenshots/Admin.png" alt="Admin dashboard" width="1899">
 
 ## Yêu cầu môi trường
 
@@ -74,10 +86,12 @@ src/
 - WebSocket server chạy tại `http://localhost:8087/ws`
 
 ## Cách chạy local
+
 ### 1. Clone project
+
 ```bash
 git clone https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
-cd <project-folder>
+cd ecommerce-frontend-1-
 ```
 
 ### 2. Cài dependencies
@@ -106,13 +120,23 @@ Frontend mặc định chạy tại:
 ```text
 http://localhost:3001
 ```
-Lưu ý: Backend cần được khởi động trước để frontend có thể gọi API và nhận cập nhật trạng thái đơn hàng qua WebSocket.
+
+Backend cần được khởi động trước để frontend có thể gọi API và nhận cập nhật trạng thái đơn hàng qua WebSocket.
+
+## Liên kết với backend benchmark
+
+Các bài test **single-SKU oversell** và **multi-SKU concurrent ordering** được thực hiện bằng JMeter trong backend repo:
+
+[ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-.git)
+
+Frontend có thể được dùng để kiểm tra trạng thái sản phẩm, tồn kho, đơn hàng và các kết quả nghiệp vụ sau khi benchmark hoàn tất.
 
 ## Hạn chế hiện tại
 
-- Chưa phải một website thương mại điện tử hoàn chỉnh
-- Giao diện được giữ ở mức đủ dùng để phục vụ kiểm thử luồng đặt hàng và quan sát kết quả
-- Trọng tâm của project nằm ở bài test oversell và xử lý đồng thời ở backend
+- Chưa phải một website thương mại điện tử hoàn chỉnh.
+- Giao diện được giữ ở mức đủ dùng để phục vụ luồng mua hàng, quản trị và quan sát kết quả.
+- Trọng tâm kỹ thuật chính của project nằm ở xử lý đồng thời, kiểm soát oversell và benchmark phía backend.
+- Project phù hợp cho chạy local và portfolio/demo hơn là triển khai production ngay.
 
 ## Tác giả
 

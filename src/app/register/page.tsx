@@ -1,137 +1,37 @@
 'use client';
-
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { App as AntdApp, Button, Form, Input, Typography } from 'antd';
-import { authApi, RegisterRequest } from '@/services/authApi';
-
-const { Title, Text } = Typography;
+import { useRouter, useSearchParams } from 'next/navigation';
+import { App, Button, Form, Input } from 'antd';
+import { authApi, type RegisterRequest } from '@/services/authApi';
+import { apiErrorMessage, httpStatus } from '@/lib/api-error';
 
 export default function RegisterPage() {
-  const router = useRouter();
-  const { message } = AntdApp.useApp();
-  const [loading, setLoading] = useState(false);
-
-  const onFinish = async (values: RegisterRequest) => {
-    setLoading(true);
+  const router = useRouter(), params = useSearchParams();
+  const { message } = App.useApp();
+  const [loading, setLoading] = useState(false), [errorText, setErrorText] = useState('');
+  const submit = async (values: RegisterRequest) => {
+    setLoading(true); setErrorText('');
     try {
       await authApi.register(values);
-      message.success('Đăng ký thành công! Vui lòng đăng nhập.');
-      router.push('/login');
+      message.success('Đã tạo tài khoản. Bạn có thể đăng nhập.');
+      router.push(`/login${params.get('next') ? '?next=' + encodeURIComponent(params.get('next')!) : ''}`);
     } catch (error) {
-      console.error(error);
-      const err = error as { response?: { data?: { message?: string } } };
-      message.error(err.response?.data?.message || 'Đăng ký thất bại, vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-    }
+      setErrorText(httpStatus(error) === 409 ? 'Tên đăng nhập hoặc email đã được sử dụng.' : apiErrorMessage(error));
+    } finally { setLoading(false); }
   };
-
-  return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fbfbfb_0%,#f1f1f1_100%)] px-4 py-10">
-      <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-[32px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-strong)]">
-        <div className="grid lg:grid-cols-[0.84fr_1.16fr]">
-          <section className="border-b border-[var(--color-border)] bg-[var(--color-surface-muted)] p-8 lg:border-b-0 lg:border-r lg:p-10">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">Thành viên mới</div>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight">Tạo tài khoản để lưu địa chỉ, giỏ hàng và đơn mua.</h1>
-            <p className="mt-4 text-sm leading-7 text-[var(--color-secondary)]">
-              Điền đầy đủ thông tin để hệ thống hỗ trợ thanh toán, giao hàng và quản lý hồ sơ khách hàng thuận tiện hơn.
-            </p>
-
-            <div className="mt-8 space-y-3">
-              {[
-                'Đăng ký nhanh trên một màn hình duy nhất',
-                'Lưu sẵn thông tin nhận hàng cho những lần mua sau',
-                'Sẵn sàng cho các tính năng theo dõi đơn và ưu đãi thành viên',
-              ].map((item) => (
-                <div key={item} className="rounded-[22px] border border-[var(--color-border)] bg-white px-4 py-3 text-sm text-[var(--color-secondary)]">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="p-5 md:p-8 lg:p-10">
-            <div className="mb-8">
-              <Title level={2} className="!mb-2 !font-semibold !tracking-tight">
-                Đăng ký tài khoản
-              </Title>
-              <Text className="text-[var(--color-secondary)]">
-                Điền thông tin bên dưới để tạo tài khoản khách hàng mới.
-              </Text>
-            </div>
-
-            <Form<RegisterRequest>
-              name="register-form"
-              layout="vertical"
-              size="large"
-              requiredMark={false}
-              onFinish={onFinish}
-              scrollToFirstError
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <Form.Item
-                  label="Tên đăng nhập"
-                  name="username"
-                  rules={[{ required: true, message: 'Vui lòng nhập username.' }]}
-                >
-                  <Input placeholder="Ví dụ: user_123" />
-                </Form.Item>
-                <Form.Item
-                  label="Mật khẩu"
-                  name="password"
-                  rules={[
-                    { required: true, message: 'Vui lòng nhập mật khẩu.' },
-                    { min: 6, message: 'Mật khẩu ít nhất 6 ký tự.' },
-                  ]}
-                >
-                  <Input.Password placeholder="Nhập mật khẩu" />
-                </Form.Item>
-              </div>
-
-              <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true, message: 'Vui lòng nhập họ và tên.' }]}>
-                <Input placeholder="Nhập họ tên đầy đủ" />
-              </Form.Item>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <Form.Item
-                  label="Email"
-                  name="email"
-                  rules={[
-                    { type: 'email', message: 'Email không hợp lệ.' },
-                    { required: true, message: 'Vui lòng nhập email.' },
-                  ]}
-                >
-                  <Input placeholder="name@example.com" />
-                </Form.Item>
-                <Form.Item
-                  label="Số điện thoại"
-                  name="phoneNumber"
-                  rules={[{ required: true, message: 'Vui lòng nhập số điện thoại.' }]}
-                >
-                  <Input placeholder="09xxxxxxxx" />
-                </Form.Item>
-              </div>
-
-              <Form.Item label="Địa chỉ nhận hàng" name="address" rules={[{ required: true, message: 'Vui lòng nhập địa chỉ.' }]}>
-                <Input.TextArea rows={4} placeholder="Số nhà, đường, phường/xã, quận/huyện…" className="!resize-none" />
-              </Form.Item>
-
-              <Button type="primary" htmlType="submit" loading={loading} block className="!mt-2 !h-12 !bg-[var(--color-primary)] !shadow-none">
-                Tạo tài khoản
-              </Button>
-            </Form>
-
-            <div className="mt-6 text-center text-sm text-[var(--color-secondary)]">
-              Đã có tài khoản?{' '}
-              <Link href="/login" className="font-semibold text-[var(--color-primary)] underline-offset-4 transition hover:underline">
-                Đăng nhập ngay
-              </Link>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="auth-page"><Link href="/" className="auth-brand brand">FLASH<span>STORE</span></Link>
+    <section className="auth-form"><h1>Tạo tài khoản</h1><p>Lưu thông tin nhận hàng và theo dõi đơn mua.</p>
+      {errorText && <div className="form-error" role="alert">{errorText}</div>}
+      <Form<RegisterRequest> layout="vertical" onFinish={submit} requiredMark={false} disabled={loading} scrollToFirstError>
+        <Form.Item label="Tên đăng nhập" name="username" rules={[{ required: true, whitespace: true, message: 'Nhập tên đăng nhập.' }]}><Input autoComplete="username" maxLength={255} /></Form.Item>
+        <Form.Item label="Email" name="email" rules={[{ required: true, message: 'Nhập email.' }, { type: 'email', message: 'Email chưa đúng định dạng.' }]}><Input type="email" autoComplete="email" maxLength={255} /></Form.Item>
+        <Form.Item label="Mật khẩu" name="password" rules={[{ required: true, message: 'Nhập mật khẩu.' }, { min: 8, max: 128, message: 'Mật khẩu cần từ 8 đến 128 ký tự.' }]}><Input.Password autoComplete="new-password" maxLength={128} /></Form.Item>
+        <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true, whitespace: true, message: 'Nhập họ và tên.' }]}><Input autoComplete="name" maxLength={255} /></Form.Item>
+        <Form.Item label="Số điện thoại" name="phoneNumber"><Input type="tel" autoComplete="tel" maxLength={255} /></Form.Item>
+        <Form.Item label="Địa chỉ liên hệ" name="address"><Input.TextArea rows={2} autoComplete="street-address" maxLength={255} /></Form.Item>
+        <Button type="primary" htmlType="submit" loading={loading} block>Tạo tài khoản</Button>
+      </Form><p className="auth-bottom">Đã có tài khoản? <Link href="/login" className="text-link">Đăng nhập</Link></p>
+    </section>
+  </div>;
 }

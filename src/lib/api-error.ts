@@ -5,6 +5,7 @@ export function httpStatus(error: unknown): number | undefined {
 }
 export function apiErrorMessage(error: unknown, fallback = 'Chưa thể thực hiện thao tác. Vui lòng thử lại.'): string {
   const status = httpStatus(error);
+  if (axios.isAxiosError(error) && error.response?.data?.code === 'SKU_RESERVED') return 'Mã SKU đã được sử dụng hoặc đã nghỉ bán và không thể tái sử dụng. Vui lòng chọn mã SKU mới.';
   if (status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
   if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
   if (status === 413) return 'Ảnh vượt giới hạn tải lên: tối đa 10 MB mỗi tệp, tổng 48 MB và không quá 20 tệp.';

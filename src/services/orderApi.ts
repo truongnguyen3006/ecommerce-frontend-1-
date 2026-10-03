@@ -12,6 +12,7 @@ export interface OrderResponse {
   orderLineItemsList: OrderLineItem[]; userId: string; paymentMethod: 'COD' | 'VNPAY';
   shippingAddressLabel?: string; shippingRecipientName?: string; shippingRecipientPhone?: string; shippingAddressLine?: string;
   cancelReason?: string; cancelledAt?: string;
+  workflowInvestigationRequired?: boolean; workflowInvestigationReason?: string;
   onlinePaymentInFlight?: boolean; paymentReconciliationRequired?: boolean;
 }
 export const orderApi = {

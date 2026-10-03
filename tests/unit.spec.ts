@@ -9,7 +9,8 @@ import { parseProductFilters } from '../src/lib/product-filters';
 import { safeReturnPath } from '../src/lib/auth-navigation';
 import { canCancelOrder, canPayOrder, getOrderTrackingSteps } from '../src/lib/order-status';
 import { validateVariants, skuPart } from '../src/lib/product-editor';
-import { paymentDestination } from '../src/services/paymentApi';
+import { paymentDestination, paymentStateMessage } from '../src/services/paymentApi';
+import { apiErrorMessage } from '../src/lib/api-error';
 import { makeOrder, fixtureToken } from './fixtures';
 
 test('URL filters validate prices and normalize page/sort', () => {
@@ -125,4 +126,14 @@ test('in-flight payment and reconciliation block cancellation while COD keeps it
   expect(canCancelOrder({ ...order, paymentReconciliationRequired: true })).toBe(false);
   const cod = { ...order, paymentMethod: 'COD' as const };
   expect(canCancelOrder(cod)).toBe(true);
+});
+
+test('expired payment has no automatic retry and investigation protects cancellation', () => {
+  expect(paymentStateMessage({orderNumber:'O',provider:'VNPAY',status:'EXPIRED_RECONCILIATION_REQUIRED',amount:10,retryAvailable:false})).toContain('hết hạn');
+  expect(paymentStateMessage({orderNumber:'O',provider:'VNPAY',status:'NOT_CREATED',amount:10,retryAvailable:true})).toContain('có thể tạo');
+  expect(canCancelOrder({status:'VALIDATED',workflowInvestigationRequired:true})).toBe(false);
+});
+
+test('retired SKU conflict explains permanent identity to admin', () => {
+  expect(apiErrorMessage({isAxiosError:true,response:{status:409,data:{code:'SKU_RESERVED'}}})).toContain('không thể tái sử dụng');
 });

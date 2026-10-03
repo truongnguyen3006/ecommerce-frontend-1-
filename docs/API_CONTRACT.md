@@ -70,3 +70,9 @@ A notification invalidates the HTTP detail query; it cannot set a fabricated com
 ## Error behavior
 
 The backend standardized error object is treated as unknown input. UI messages map HTTP status to concise Vietnamese text, preserve retry where appropriate and avoid exposing infrastructure payloads. Loading, empty, missing, permission, network and stock-conflict states are distinct. No production fixture catalog, fake stock or success response is present.
+
+Batch 4 additions: Order responses expose `workflowInvestigationRequired` and `workflowInvestigationReason`. Investigation protects payment and cancellation; recovery retains SQL inventory receipts. Only ADMIN can request bounded inventory replay via `/api/order/admin/{orderNumber}/retry-inventory` for eligible PENDING orders.
+
+Payment responses expose `expiresAt` and `retryAvailable`. Active URLs are valid for 15 minutes. `EXPIRED_RECONCILIATION_REQUIRED` exposes no payment URL and no automatic retry; expiry does not clear the Order fence. `NOT_CREATED` may advertise retryAvailable for an eligible owner order. Repeated active creation returns the same attempt. Return navigates with `payment=waiting` and never confirms money; the UI reads authenticated service state. IPN records provider notifications using the official acknowledgement codes documented in backend `docs/batch4-correctness.md`.
+
+Catalog SKU codes are permanently reserved. `SKU_RESERVED` (409) means the admin must choose a new code, including for retired/deleted variants. `SKU_IDENTITY_UNAVAILABLE` (503) means the authoritative identity check is temporarily unavailable.

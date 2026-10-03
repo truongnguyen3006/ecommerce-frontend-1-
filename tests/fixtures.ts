@@ -31,7 +31,7 @@ export const makeOrder = (status: OrderStatus = 'VALIDATED', paymentMethod: 'COD
   orderLineItemsList: [{ id: 1, skuCode: 'FIXTURE-1-BLACK-40', quantity: 1, price: 100000, productName: 'Sản phẩm kiểm thử 01', color: 'Đen', size: '40' }],
 });
 export interface RequestRecord { path: string; method: string; body: unknown; idempotencyKey?: string; query: string }
-export async function mockBackend(page: Page, options: { role?: Role; terminal?: OrderStatus; initialOrder?: OrderResponse; emptyCart?: boolean } = {}) {
+export async function mockBackend(page: Page, options: { role?: Role; terminal?: OrderStatus; initialOrder?: OrderResponse; emptyCart?: boolean; paymentState?: string } = {}) {
   const actor = options.role || 'user';
   const products = makeProducts();
   const cart: Cart = { userId: actor + '-fixture', items: options.emptyCart ? [] : [{ skuCode: 'FIXTURE-1-BLACK-40', quantity: 1, productName: products[0].name, price: 100000, imageUrl: '/product-placeholder.svg' }] };
@@ -132,7 +132,7 @@ export async function mockBackend(page: Page, options: { role?: Role; terminal?:
       if (accepted && orderReads > 1) order.status = options.terminal || 'VALIDATED';
       return respond(order);
     }
-    if (path === '/api/payment/order/' + order.orderNumber) return respond({ orderNumber: order.orderNumber, provider: 'VNPAY', status: 'NOT_CREATED', amount: order.totalPrice });
+    if (path === '/api/payment/order/' + order.orderNumber) return respond({ orderNumber: order.orderNumber, provider: 'VNPAY', status: options.paymentState || 'NOT_CREATED', amount: order.totalPrice });
     if (path === '/api/payment/vnpay/create') return respond({ code: 'CONFLICT', message: 'Not configured' }, 409);
     if (path.startsWith('/api/product/uploads/')) return respond(path.endsWith('/gallery') ? [{ secureUrl: '/product-placeholder.svg', publicId: 'fixture-image' }] : { secureUrl: '/product-placeholder.svg', publicId: 'fixture-image' });
     return respond({ code: 'NOT_FOUND' }, 404);

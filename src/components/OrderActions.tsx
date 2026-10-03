@@ -2,7 +2,7 @@
 import { App, Button } from 'antd';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderApi, type OrderResponse } from '@/services/orderApi';
-import { paymentApi, paymentDestination } from '@/services/paymentApi';
+import { paymentApi, paymentDestination, paymentStateMessage } from '@/services/paymentApi';
 import { canCancelOrder, canPayOrder } from '@/lib/order-status';
 import { freshAccessToken } from '@/lib/axiosClient';
 import { apiErrorMessage } from '@/lib/api-error';
@@ -23,8 +23,8 @@ export default function OrderActions({ order }: { order: OrderResponse }) {
     mutationFn: async () => { await freshAccessToken(); return paymentApi.createVnpayPayment(order.orderNumber); },
     onSuccess: async (payment) => {
       if (payment.status === 'SUCCESS') { message.info('Thanh toán đã được ghi nhận.'); await refresh(); return; }
-      if (['SUCCESS_PENDING_ORDER', 'RECONCILIATION_REQUIRED'].includes(payment.status)) {
-        message.info(payment.status === 'RECONCILIATION_REQUIRED' ? 'Đã ghi nhận tiền; đơn hàng cần đối soát. Vui lòng liên hệ hỗ trợ.' : 'Đã ghi nhận tiền; đang xác nhận đơn hàng.');
+      if (['SUCCESS_PENDING_ORDER', 'RECONCILIATION_REQUIRED', 'EXPIRED_RECONCILIATION_REQUIRED'].includes(payment.status)) {
+        message.info(paymentStateMessage(payment));
         await refresh(); return;
       }
       const destination = paymentDestination(payment.paymentUrl);
@@ -33,6 +33,7 @@ export default function OrderActions({ order }: { order: OrderResponse }) {
     onError: (error) => { message.error(apiErrorMessage(error)); void refresh(); },
   });
   const busy = cancel.isPending || pay.isPending;
+  if (order.workflowInvestigationRequired) return <p className="form-error" role="status">Đơn hàng cần kiểm tra hoặc đối soát. Vui lòng liên hệ hỗ trợ trước khi thanh toán hoặc hủy.</p>;
   if (order.paymentReconciliationRequired) return <p className="form-error" role="status">Đã ghi nhận tiền; đơn hàng cần đối soát. Vui lòng liên hệ hỗ trợ trước khi thanh toán lại.</p>;
   if (!canCancelOrder(order) && !canPayOrder(order, user?.keycloakId)) return null;
   return <div className="order-actions">

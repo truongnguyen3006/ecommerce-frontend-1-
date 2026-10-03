@@ -357,3 +357,12 @@ test('STOMP CONNECT carries bearer header and notifications refetch authoritativ
   backend.setOrderStatus('COMPLETED'); sendNotification!();
   await expect(page.getByRole('heading', { name: 'Đã hoàn tất xử lý', exact: true })).toBeVisible();
 });
+
+test('expired payment shows investigation and disables financial actions', async ({ page }) => {
+  await signIn(page);
+  await mockBackend(page, {initialOrder:{...makeOrder('VALIDATED'),onlinePaymentInFlight:true,workflowInvestigationRequired:true},paymentState:'EXPIRED_RECONCILIATION_REQUIRED'});
+  await page.goto('/checkout/waiting/order-fixture-1?payment=waiting');
+  await expect(page.getByText('Liên kết thanh toán đã hết hạn.',{exact:false})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Thanh toán VNPay'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Hủy đơn hàng'})).toHaveCount(0);
+});

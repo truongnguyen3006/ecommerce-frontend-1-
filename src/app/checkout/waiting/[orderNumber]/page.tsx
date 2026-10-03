@@ -8,7 +8,7 @@ import { useOrderTracking } from '@/lib/useOrderTracking';
 import { getOrderStatusMeta, getOrderTrackingSteps } from '@/lib/order-status';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCheckoutStore } from '@/store/useCheckoutStore';
-import { paymentApi } from '@/services/paymentApi';
+import { paymentApi, paymentStateMessage } from '@/services/paymentApi';
 import { cartApi } from '@/services/cartApi';
 import { apiErrorMessage, httpStatus } from '@/lib/api-error';
 import { freshAccessToken } from '@/lib/axiosClient';
@@ -31,7 +31,7 @@ function TrackedOrder({ orderNumber }: { orderNumber: string }) {
     queryKey: ['payment', userId, orderNumber], queryFn: () => paymentApi.getPaymentByOrderNumber(orderNumber),
     enabled: query.data?.paymentMethod === 'VNPAY' && query.data?.userId === userId,
     staleTime: 10_000,
-    refetchInterval: (state) => state.state.data?.status === 'SUCCESS_PENDING_ORDER' ? 3_000 : false,
+    refetchInterval: (state) => ['PENDING', 'SUCCESS_PENDING_ORDER'].includes(state.state.data?.status || '') ? 3_000 : false,
   });
   useEffect(() => {
     if (acceptedHere && ['FAILED', 'PAYMENT_FAILED', 'CANCELLED'].includes(query.data?.status || '')) useCheckoutStore.getState().finish(userId);
@@ -64,8 +64,8 @@ function TrackedOrder({ orderNumber }: { orderNumber: string }) {
     {query.paused && !['COMPLETED', 'FAILED', 'PAYMENT_FAILED', 'CANCELLED'].includes(order.status) && <p className="form-error mt-6">Chưa có kết quả cuối cùng. Bấm tải lại để tiếp tục theo dõi.</p>}
     <ol className="order-tracking">{getOrderTrackingSteps(order).map((step) => <li key={step.title} data-state={step.status}><strong>{step.title}</strong><small>{step.description}</small></li>)}</ol>
     {!['COMPLETED', 'FAILED', 'PAYMENT_FAILED', 'CANCELLED'].includes(order.status) && <p className="text-xs muted">{query.connected ? 'Đang nhận cập nhật trực tiếp.' : 'Trạng thái sẽ được tự động kiểm tra lại.'}</p>}
-    {params.get('payment') && order.paymentMethod === 'VNPAY' && <p className="form-error mt-6" aria-live="polite">
-      {payment.data?.status === 'RECONCILIATION_REQUIRED' ? 'Đã ghi nhận tiền; đơn hàng cần đối soát. Vui lòng liên hệ hỗ trợ.' : payment.data?.status === 'SUCCESS_PENDING_ORDER' ? 'Đã ghi nhận tiền; đang xác nhận quyết định đơn hàng.' : payment.data?.status === 'SUCCESS' ? 'Thanh toán đã được xác nhận từ dịch vụ.' : payment.data?.status === 'FAILED' ? 'Dịch vụ ghi nhận thanh toán thất bại.' : 'Đang kiểm tra kết quả thanh toán. Thông tin hiển thị theo trạng thái từ dịch vụ.'}
+    {(params.get('payment') || payment.data?.status !== 'NOT_CREATED') && order.paymentMethod === 'VNPAY' && <p className="form-error mt-6" aria-live="polite">
+      {payment.data ? paymentStateMessage(payment.data) : 'Đang kiểm tra kết quả thanh toán. Thông tin hiển thị theo trạng thái từ dịch vụ.'}
     </p>}
     {payment.isError && <p className="text-sm mt-6">Chưa tải được thông tin thanh toán. <button type="button" className="text-link" onClick={() => void payment.refetch()}>Thử lại</button></p>}
     <OrderSummary order={order} /><OrderActions order={order} />

@@ -40,17 +40,18 @@ function buildUserFromToken(
   currentUser?: UserProfile | null,
 ): UserProfile {
   const decoded = jwtDecode<KeycloakTokenPayload>(token);
+  const previous = currentUser?.keycloakId === decoded.sub ? currentUser : null;
 
   return {
-    id: dbUser?.id ?? currentUser?.id,
+    id: dbUser?.id ?? previous?.id,
     keycloakId: decoded.sub,
-    fullName: dbUser?.fullName ?? currentUser?.fullName,
-    email: dbUser?.email ?? currentUser?.email,
-    phoneNumber: dbUser?.phoneNumber ?? currentUser?.phoneNumber,
-    address: dbUser?.address ?? currentUser?.address,
-    status: dbUser?.status ?? currentUser?.status,
-    username: decoded.preferred_username || dbUser?.username || currentUser?.username,
-    roles: normalizeRoles(decoded.realm_access?.roles ?? dbUser?.roles ?? currentUser?.roles),
+    fullName: dbUser?.fullName ?? previous?.fullName,
+    email: dbUser?.email ?? previous?.email,
+    phoneNumber: dbUser?.phoneNumber ?? previous?.phoneNumber,
+    address: dbUser?.address ?? previous?.address,
+    status: dbUser?.status ?? previous?.status,
+    username: decoded.preferred_username || dbUser?.username || previous?.username,
+    roles: normalizeRoles(decoded.realm_access?.roles ?? dbUser?.roles ?? previous?.roles),
   };
 }
 
@@ -73,8 +74,8 @@ export const useAuthStore = create<AuthState>()(
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('access_token', token);
           }
-        } catch (error) {
-          console.error('Lỗi decode token:', error);
+        } catch {
+          get().logout();
         }
       },
 
@@ -86,8 +87,8 @@ export const useAuthStore = create<AuthState>()(
           if (typeof window !== 'undefined') {
             sessionStorage.setItem('access_token', token);
           }
-        } catch (error) {
-          console.error('Lỗi đồng bộ token:', error);
+        } catch {
+          get().logout();
         }
       },
 
@@ -103,6 +104,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'flash-sale-auth',
       storage: createJSONStorage(() => sessionStorage),
+      skipHydration: true,
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

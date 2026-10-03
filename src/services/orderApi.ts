@@ -1,139 +1,24 @@
 import axiosClient from '@/lib/axiosClient';
-import { isRecord, readNumber, readString, unwrapCollection } from '@/lib/api-normalizers';
-
+export type OrderStatus = 'PENDING' | 'VALIDATED' | 'COMPLETED' | 'FAILED' | 'PAYMENT_FAILED' | 'CANCELLED';
 export interface OrderRequest {
-  items: {
-    skuCode: string;
-    quantity: number;
-  }[];
-  paymentMethod?: 'COD' | 'VNPAY';
-  shippingAddressLabel?: string;
-  shippingRecipientName?: string;
-  shippingRecipientPhone?: string;
-  shippingAddressLine?: string;
+  items: { skuCode: string; quantity: number }[];
+  paymentMethod: 'COD' | 'VNPAY';
+  shippingAddressLabel?: string; shippingRecipientName?: string; shippingRecipientPhone?: string; shippingAddressLine?: string;
 }
-
-export interface OrderPlacementResponse {
-  orderNumber: string;
-  message: string;
-}
-
-export interface OrderLineItem {
-  id: number | string;
-  skuCode: string;
-  price: number;
-  quantity: number;
-  productName: string;
-  color: string;
-  size: string;
-}
-
+export interface OrderPlacementResponse { orderNumber: string; message: string }
+export interface OrderLineItem { id: number; skuCode: string; price: number; quantity: number; productName: string; color?: string; size?: string }
 export interface OrderResponse {
-  id: number | string;
-  orderNumber: string;
-  status: string;
-  totalPrice: number;
-  orderDate: string;
-  orderLineItemsList: OrderLineItem[];
-  userId?: string;
-  customerName?: string;
-  customerEmail?: string;
-  paymentMethod?: string;
-  shippingAddressLabel?: string;
-  shippingRecipientName?: string;
-  shippingRecipientPhone?: string;
-  shippingAddressLine?: string;
-  cancelReason?: string;
-  cancelledAt?: string;
+  id: number; orderNumber: string; status: OrderStatus; totalPrice: number; orderDate: string;
+  orderLineItemsList: OrderLineItem[]; userId: string; paymentMethod: 'COD' | 'VNPAY';
+  shippingAddressLabel?: string; shippingRecipientName?: string; shippingRecipientPhone?: string; shippingAddressLine?: string;
+  cancelReason?: string; cancelledAt?: string;
 }
-
-function normalizeOrderLineItem(payload: unknown): OrderLineItem {
-  if (!isRecord(payload)) {
-    return {
-      id: '',
-      skuCode: '',
-      price: 0,
-      quantity: 0,
-      productName: '',
-      color: '',
-      size: '',
-    };
-  }
-
-  return {
-    id: String(payload.id ?? payload.skuCode ?? ''),
-    skuCode: readString(payload.skuCode || payload.sku),
-    price: readNumber(payload.price ?? payload.unitPrice),
-    quantity: readNumber(payload.quantity),
-    productName: readString(payload.productName || payload.name),
-    color: readString(payload.color),
-    size: readString(payload.size),
-  };
-}
-
-function normalizeOrder(payload: unknown): OrderResponse {
-  if (!isRecord(payload)) {
-    return {
-      id: '',
-      orderNumber: '',
-      status: 'PENDING',
-      totalPrice: 0,
-      orderDate: '',
-      orderLineItemsList: [],
-    };
-  }
-
-  const rawItems = unwrapCollection<unknown>(
-    payload.orderLineItemsList ?? payload.orderItems ?? payload.lineItems ?? payload.items,
-    ['orderLineItemsList', 'orderItems', 'lineItems', 'items'],
-  );
-
-  const orderNumber = readString(payload.orderNumber || payload.orderCode || payload.code || payload.id);
-
-  return {
-    id: String(payload.id ?? orderNumber),
-    orderNumber,
-    status: readString(payload.status, 'PENDING').toUpperCase(),
-    totalPrice: readNumber(payload.totalPrice ?? payload.totalAmount ?? payload.amount),
-    orderDate: readString(payload.orderDate || payload.createdAt || payload.createdDate),
-    orderLineItemsList: rawItems.map(normalizeOrderLineItem),
-    userId: readString(payload.userId || payload.accountId),
-    customerName: readString(payload.customerName || payload.fullName || payload.username),
-    customerEmail: readString(payload.customerEmail || payload.email),
-    paymentMethod: readString(payload.paymentMethod, 'COD').toUpperCase(),
-    shippingAddressLabel: readString(payload.shippingAddressLabel),
-    shippingRecipientName: readString(payload.shippingRecipientName),
-    shippingRecipientPhone: readString(payload.shippingRecipientPhone),
-    shippingAddressLine: readString(payload.shippingAddressLine),
-    cancelReason: readString(payload.cancelReason),
-    cancelledAt: readString(payload.cancelledAt),
-  };
-}
-
-async function fetchOrdersFromEndpoint(endpoint: string): Promise<OrderResponse[]> {
-  const response = await axiosClient.get<unknown, unknown>(endpoint);
-  return unwrapCollection<unknown>(response, ['content', 'items', 'data', 'orders']).map(normalizeOrder);
-}
-
 export const orderApi = {
-  placeOrder: (data: OrderRequest) =>
-    axiosClient.post<OrderPlacementResponse, OrderPlacementResponse>('/api/order', data),
-
-  getAllOrders: async (): Promise<OrderResponse[]> => {
-    return fetchOrdersFromEndpoint('/api/order/me');
-  },
-
-  getAdminOrders: async (): Promise<OrderResponse[]> => {
-    return fetchOrdersFromEndpoint('/api/order/admin');
-  },
-
-  getOrderById: async (orderNumber: string): Promise<OrderResponse> => {
-    const response = await axiosClient.get<unknown, unknown>(`/api/order/${orderNumber}`);
-    return normalizeOrder(response);
-  },
-
-  cancelOrder: async (orderNumber: string, reason?: string): Promise<OrderResponse> => {
-    const response = await axiosClient.post<unknown, unknown>(`/api/order/${orderNumber}/cancel`, { reason });
-    return normalizeOrder(response);
-  },
+  placeOrder: (data: OrderRequest, idempotencyKey: string): Promise<OrderPlacementResponse> =>
+    axiosClient.post<OrderPlacementResponse, OrderPlacementResponse>('/api/order', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
+  getAllOrders: (): Promise<OrderResponse[]> => axiosClient.get<OrderResponse[], OrderResponse[]>('/api/order/me'),
+  getAdminOrders: (): Promise<OrderResponse[]> => axiosClient.get<OrderResponse[], OrderResponse[]>('/api/order/admin'),
+  getOrderById: (orderNumber: string): Promise<OrderResponse> => axiosClient.get<OrderResponse, OrderResponse>(`/api/order/${encodeURIComponent(orderNumber)}`),
+  cancelOrder: (orderNumber: string, reason?: string): Promise<OrderResponse> =>
+    axiosClient.post<OrderResponse, OrderResponse>(`/api/order/${encodeURIComponent(orderNumber)}/cancel`, { reason }),
 };

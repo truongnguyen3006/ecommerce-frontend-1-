@@ -1,22 +1,17 @@
 import axiosClient from '@/lib/axiosClient';
-import { Product, CreateProductRequest } from '@/types';
-import { unwrapCollection } from '@/lib/api-normalizers';
+import type { Product, ProductPage, CreateProductRequest, CatalogItem } from '@/types';
 
+export interface ProductSearch {
+  keyword?: string; category?: string; minPrice?: number; maxPrice?: number;
+  color?: string; size?: string; page?: number; pageSize?: number; sort?: string;
+}
 export const productApi = {
-  getAll: async (): Promise<Product[]> => {
-    const response = await axiosClient.get<unknown, unknown>('/api/product');
-    return unwrapCollection<Product>(response, ['content', 'items', 'data', 'products']);
-  },
-
-  getById: async (id: number | string): Promise<Product> =>
-    axiosClient.get<Product, Product>(`/api/product/${id}`),
-
-  create: async (data: CreateProductRequest): Promise<Product> =>
-    axiosClient.post<Product, Product>('/api/product', data),
-
-  update: async (id: number | string, data: Partial<CreateProductRequest>): Promise<Product> =>
-    axiosClient.put<Product, Product>(`/api/product/${id}`, data),
-
-  delete: async (id: number | string): Promise<void> =>
-    axiosClient.delete<void, void>(`/api/product/${id}`),
+  getAll: (): Promise<Product[]> => axiosClient.get<Product[], Product[]>('/api/product'),
+  search: (params: ProductSearch, signal?: AbortSignal): Promise<ProductPage> =>
+    axiosClient.get<ProductPage, ProductPage>('/api/product/search', { params, signal }),
+  getById: (id: number | string): Promise<Product> => axiosClient.get<Product, Product>(`/api/product/${encodeURIComponent(id)}`),
+  getSku: (sku: string): Promise<CatalogItem> => axiosClient.get<CatalogItem, CatalogItem>(`/api/product/sku/${encodeURIComponent(sku)}`),
+  create: (data: CreateProductRequest): Promise<Product> => axiosClient.post<Product, Product>('/api/product', data),
+  update: (id: number | string, data: Partial<CreateProductRequest>): Promise<Product> => axiosClient.put<Product, Product>(`/api/product/${id}`, data),
+  delete: (id: number | string): Promise<void> => axiosClient.delete<void, void>(`/api/product/${id}`),
 };

@@ -1,44 +1,17 @@
 import axiosClient from '@/lib/axiosClient';
-import { isRecord, readNumber, readString } from '@/lib/api-normalizers';
-
 export interface PaymentTransactionResponse {
-  orderNumber: string;
-  provider: string;
-  status: string;
-  amount: number;
-  paymentUrl?: string;
-  txnRef?: string;
-  gatewayMessage?: string;
+  orderNumber: string; provider: string; status: 'NOT_CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED';
+  amount: number; paymentUrl?: string; txnRef?: string; gatewayMessage?: string;
 }
-
-function normalizePayment(payload: unknown): PaymentTransactionResponse {
-  if (!isRecord(payload)) {
-    return {
-      orderNumber: '',
-      provider: '',
-      status: '',
-      amount: 0,
-    };
-  }
-
-  return {
-    orderNumber: readString(payload.orderNumber),
-    provider: readString(payload.provider),
-    status: readString(payload.status),
-    amount: readNumber(payload.amount),
-    paymentUrl: readString(payload.paymentUrl),
-    txnRef: readString(payload.txnRef),
-    gatewayMessage: readString(payload.gatewayMessage),
-  };
+export function paymentDestination(value?: string): string | null {
+  try {
+    const url = new URL(value || '');
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
 }
-
 export const paymentApi = {
-  createVnpayPayment: async (orderNumber: string): Promise<PaymentTransactionResponse> => {
-    const response = await axiosClient.post<unknown, unknown>('/api/payment/vnpay/create', { orderNumber });
-    return normalizePayment(response);
-  },
-  getPaymentByOrderNumber: async (orderNumber: string): Promise<PaymentTransactionResponse> => {
-    const response = await axiosClient.get<unknown, unknown>(`/api/payment/order/${orderNumber}`);
-    return normalizePayment(response);
-  },
+  createVnpayPayment: (orderNumber: string): Promise<PaymentTransactionResponse> =>
+    axiosClient.post<PaymentTransactionResponse, PaymentTransactionResponse>('/api/payment/vnpay/create', { orderNumber }),
+  getPaymentByOrderNumber: (orderNumber: string): Promise<PaymentTransactionResponse> =>
+    axiosClient.get<PaymentTransactionResponse, PaymentTransactionResponse>(`/api/payment/order/${encodeURIComponent(orderNumber)}`),
 };

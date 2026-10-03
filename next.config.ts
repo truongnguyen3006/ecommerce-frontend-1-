@@ -1,27 +1,21 @@
-//server next.js hoạt động
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
+
+const gateway = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
 const nextConfig: NextConfig = {
-  //cho phép các url ảnh hợp lệ, giống csrf
   images: {
+    // Explicit hosts for Cloudinary uploads and existing catalog photography.
     remotePatterns: [
-      { protocol: 'https', hostname: '**' },
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+      { protocol: 'https', hostname: 'static.nike.com' },
+      ...(process.env.PRODUCT_IMAGE_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean)
+        .map((hostname) => ({ protocol: 'https' as const, hostname })),
     ],
   },
-
-    //rewrites tránh lỗi CORS, Giấu địa chỉ Backend
-    async rewrites() {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      return [
-        {
-          source: '/api/:path*',
-          destination: `${API_URL}/api/:path*`,
-        },
-        {
-          source: '/auth/:path*',
-          destination: `${API_URL}/auth/:path*`, 
-        },
-      ];
-    },
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${gateway}/api/:path*` },
+      { source: '/auth/:path*', destination: `${gateway}/auth/:path*` },
+    ];
+  },
 };
-
 export default nextConfig;

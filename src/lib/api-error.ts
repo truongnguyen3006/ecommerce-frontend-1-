@@ -8,6 +8,8 @@ export function apiErrorMessage(error: unknown, fallback = 'Chưa thể thực h
   if (status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
   if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
   if (status === 404) return 'Dữ liệu không còn tồn tại hoặc chưa sẵn sàng.';
+  if (status === 409 && axios.isAxiosError(error) && error.response?.data?.message === 'ONLINE_PAYMENT_IN_FLIGHT')
+    return 'Thanh toán trực tuyến đã bắt đầu hoặc cần đối soát. Đơn chưa thể hủy; vui lòng chờ kết quả hoặc liên hệ hỗ trợ.';
   if (status === 409) return 'Dữ liệu đã thay đổi hoặc số lượng vượt tồn kho. Kiểm tra lại trước khi tiếp tục.';
   if (!status || status >= 500) return 'Không thể kết nối dịch vụ. Vui lòng thử lại sau.';
   if (status === 400) return 'Thông tin chưa hợp lệ. Kiểm tra các trường và thử lại.';

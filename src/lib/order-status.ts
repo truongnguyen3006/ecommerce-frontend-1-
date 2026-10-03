@@ -12,9 +12,11 @@ export function getOrderStatusMeta(status: string): OrderStatusMeta {
   return { color: 'default', ...(meta[status] || { label: status || 'Chưa có trạng thái', step: 1, description: 'Hãy tải lại để kiểm tra trạng thái đơn hàng.' }) };
 }
 export function isTerminalOrder(status?: string): boolean { return ['COMPLETED', 'FAILED', 'PAYMENT_FAILED', 'CANCELLED'].includes(status || ''); }
-export function canCancelOrder(order: Pick<OrderResponse, 'status'>): boolean { return ['VALIDATED', 'PAYMENT_FAILED'].includes(order.status); }
+export function canCancelOrder(order: Pick<OrderResponse, 'status' | 'onlinePaymentInFlight' | 'paymentReconciliationRequired'>): boolean {
+  return !order.paymentReconciliationRequired && !order.onlinePaymentInFlight && ['VALIDATED', 'PAYMENT_FAILED'].includes(order.status);
+}
 export function canPayOrder(order: OrderResponse, ownerId?: string): boolean {
-  return order.userId === ownerId && order.paymentMethod === 'VNPAY' && order.status === 'VALIDATED' && order.totalPrice > 0;
+  return !order.paymentReconciliationRequired && order.userId === ownerId && order.paymentMethod === 'VNPAY' && order.status === 'VALIDATED' && order.totalPrice > 0;
 }
 export function getOrderTrackingSteps(order: Pick<OrderResponse, 'status'>) {
   const failure = ['FAILED', 'CANCELLED', 'PAYMENT_FAILED'].includes(order.status);

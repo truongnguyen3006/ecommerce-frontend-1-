@@ -190,6 +190,23 @@ test('order cancellation uses confirmation and correct endpoint', async ({ page 
   await expect(page.getByText('Đã hủy', { exact: true })).toBeVisible();
   expect(backend.records.some((record) => record.path === '/api/order/order-fixture-1/cancel' && record.method === 'POST')).toBe(true);
 });
+test('in-flight online payment hides cancellation while keeping payment resume', async ({ page }) => {
+  await signIn(page);
+  await mockBackend(page, { initialOrder: { ...makeOrder('VALIDATED'), onlinePaymentInFlight: true } });
+  await page.goto('/orders');
+  await expect(page.getByRole('button', { name: 'Hủy đơn hàng' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Thanh toán VNPay' })).toBeVisible();
+  await expect(page.getByText('Thanh toán trực tuyến đã bắt đầu. Đơn chưa thể hủy trong khi chờ kết quả.')).toBeVisible();
+});
+test('late-money reconciliation preserves cancelled order and blocks another payment', async ({ page }) => {
+  await signIn(page);
+  await mockBackend(page, { initialOrder: { ...makeOrder('CANCELLED'), paymentReconciliationRequired: true } });
+  await page.goto('/checkout/waiting/order-fixture-1');
+  await expect(page.getByRole('heading', { name: 'Đã hủy', exact: true })).toBeVisible();
+  await expect(page.getByText('Đã ghi nhận tiền; đơn hàng cần đối soát. Vui lòng liên hệ hỗ trợ trước khi thanh toán lại.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hủy đơn hàng' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Thanh toán VNPay' })).toHaveCount(0);
+});
 test('profile edits and address create/edit/default/delete preserve backend contracts', async ({ page }) => {
   await signIn(page);
   const backend = await mockBackend(page);

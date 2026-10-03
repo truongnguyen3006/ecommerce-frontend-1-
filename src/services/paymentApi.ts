@@ -1,6 +1,7 @@
 import axiosClient from '@/lib/axiosClient';
 export interface PaymentTransactionResponse {
-  orderNumber: string; provider: string; status: 'NOT_CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED';
+  orderNumber: string; provider: string; status: 'NOT_CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'SUCCESS_PENDING_ORDER' | 'RECONCILIATION_REQUIRED';
+  providerSuccessReceived?: boolean;
   amount: number; paymentUrl?: string; txnRef?: string; gatewayMessage?: string;
 }
 export function paymentDestination(value?: string): string | null {

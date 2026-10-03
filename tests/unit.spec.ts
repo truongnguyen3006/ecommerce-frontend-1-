@@ -118,3 +118,11 @@ test.describe('real Axios interceptor with deterministic transport', () => {
     await expect(refreshAccessToken()).resolves.toBe(renewed);
   });
 });
+
+test('in-flight payment and reconciliation block cancellation while COD keeps its behavior', () => {
+  const order = makeOrder('VALIDATED');
+  expect(canCancelOrder({ ...order, onlinePaymentInFlight: true })).toBe(false);
+  expect(canCancelOrder({ ...order, paymentReconciliationRequired: true })).toBe(false);
+  const cod = { ...order, paymentMethod: 'COD' as const };
+  expect(canCancelOrder(cod)).toBe(true);
+});

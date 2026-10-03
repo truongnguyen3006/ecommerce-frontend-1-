@@ -1,125 +1,25 @@
 'use client';
-
-import { useEffect, useState } from 'react';
-import { App as AntdApp, Card, Col, Empty, Row, Spin, Statistic } from 'antd';
-import { DollarCircleOutlined, ShoppingOutlined, UserOutlined } from '@ant-design/icons';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { orderApi } from '@/services/orderApi';
 import { userManagementApi } from '@/services/userManagementApi';
-
-function formatMoney(value: number) {
-  return new Intl.NumberFormat('vi-VN').format(value);
-}
-
+import { productApi } from '@/services/productApi';
+import { formatMoney, formatDate } from '@/lib/format';
+import { getOrderStatusMeta } from '@/lib/order-status';
+import PageState from '@/components/ui/PageState';
 export default function AdminDashboard() {
-  const { message } = AntdApp.useApp();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    dailyRevenue: 0,
-    newOrdersToday: 0,
-    totalOrders: 0,
-  });
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [usersData, ordersData] = await Promise.all([
-          userManagementApi.getAll(),
-          orderApi.getAdminOrders(),
-        ]);
-        const todayStr = new Date().toISOString().slice(0, 10);
-
-        const filteredOrders = ordersData.filter(
-          (order) => order.status !== 'FAILED' && order.status !== 'PAYMENT_FAILED',
-        );
-        const ordersToday = filteredOrders.filter((order) => order.orderDate?.startsWith(todayStr));
-        const revenueToday = ordersToday.reduce(
-          (total, order) => total + (order.totalPrice || 0),
-          0,
-        );
-
-        setStats({
-          totalUsers: usersData.length,
-          totalOrders: ordersData.length,
-          newOrdersToday: ordersToday.length,
-          dailyRevenue: revenueToday,
-        });
-      } catch (error) {
-        console.error('Lỗi tải Dashboard:', error);
-        message.warning('Không thể tải đầy đủ số liệu thống kê.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void fetchData();
-  }, [message]);
-
-  if (loading) {
-    return (
-      <div className="app-admin-card flex min-h-[420px] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Spin size="large" />
-          <p className="text-sm text-[var(--color-secondary)]">Đang tổng hợp số liệu…</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="app-admin-card px-6 py-6 md:px-8 md:py-8">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">Tổng quan</div>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Dashboard quản trị</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--color-secondary)]">
-          Theo dõi nhanh số lượng thành viên, doanh thu trong ngày và nhịp phát sinh đơn hàng.
-        </p>
-      </div>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={12} xl={8}>
-          <Card className="app-admin-card border-0">
-            <Statistic title="Tổng thành viên" value={stats.totalUsers} prefix={<UserOutlined />} />
-            <p className="mt-3 text-sm text-[var(--color-secondary)]">Số lượng người dùng đang có trong hệ thống.</p>
-          </Card>
-        </Col>
-        <Col xs={24} md={12} xl={8}>
-          <Card className="app-admin-card border-0">
-            <Statistic
-              title="Doanh thu hôm nay"
-              value={formatMoney(stats.dailyRevenue)}
-              suffix="đ"
-              prefix={<DollarCircleOutlined />}
-            />
-            <p className="mt-3 text-sm text-[var(--color-secondary)]">Tính trên các đơn không thất bại trong ngày hiện tại.</p>
-          </Card>
-        </Col>
-        <Col xs={24} md={12} xl={8}>
-          <Card className="app-admin-card border-0">
-            <Statistic
-              title="Đơn hàng hôm nay"
-              value={stats.newOrdersToday}
-              suffix={`/ ${stats.totalOrders}`}
-              prefix={<ShoppingOutlined />}
-            />
-            <p className="mt-3 text-sm text-[var(--color-secondary)]">Theo dõi tốc độ phát sinh đơn hàng theo ngày.</p>
-          </Card>
-        </Col>
-      </Row>
-
-      <Card className="app-admin-card border-0">
-        {stats.totalOrders === 0 && stats.totalUsers === 0 ? (
-          <Empty description="Chưa có dữ liệu để hiển thị" />
-        ) : (
-          <div className="space-y-2">
-            <h2 className="text-xl font-semibold tracking-tight">Tình trạng hệ thống</h2>
-            <p className="text-sm leading-6 text-[var(--color-secondary)]">
-              Dữ liệu trong khu vực quản trị sẽ thay đổi theo danh sách người dùng và đơn hàng hiện có.
-            </p>
-          </div>
-        )}
-      </Card>
-    </div>
-  );
+  const users = useQuery({ queryKey: ['admin-users'], queryFn: userManagementApi.getAll });
+  const orders = useQuery({ queryKey: ['admin-orders'], queryFn: orderApi.getAdminOrders });
+  const products = useQuery({ queryKey: ['catalog'], queryFn: productApi.getAll });
+  const today = new Date().toLocaleDateString('en-CA');
+  const completedToday = orders.data?.filter((order) => order.status === 'COMPLETED' && new Date(order.orderDate.replace(' ', 'T')).toLocaleDateString('en-CA') === today);
+  const loading = users.isPending || orders.isPending || products.isPending;
+  return <section><div className="page-heading"><div><div className="eyebrow">Quản trị</div><h1>Tổng quan</h1><p>Dữ liệu từ danh mục, tài khoản và đơn hàng hiện có.</p></div></div>
+    {loading ? <PageState title="Đang tải tổng quan…" /> : users.isError || orders.isError || products.isError ? <PageState title="Chưa thể tải đầy đủ tổng quan" description="Thử tải lại các nguồn dữ liệu." retry={() => { void users.refetch(); void orders.refetch(); void products.refetch(); }} /> :
+      <><dl className="admin-stats"><div><dt>Sản phẩm</dt><dd>{products.data.length}</dd></div><div><dt>Tài khoản</dt><dd>{users.data.length}</dd></div><div><dt>Đơn hàng</dt><dd>{orders.data.length}</dd></div></dl>
+        <div className="mb-12"><h2>Giá trị đơn hoàn tất hôm nay</h2><p className="text-3xl mt-4">{formatMoney(completedToday?.reduce((sum, order) => sum + order.totalPrice, 0) || 0)}</p><p className="text-sm muted mt-3">Chỉ tính đơn ở trạng thái hoàn tất xử lý; không phải xác nhận giao hàng hay tiền đã thu từ COD.</p></div>
+        <div className="section-header"><h2>Đơn gần đây</h2><Link href="/admin/orders" className="text-link text-sm">Xem tất cả</Link></div>
+        {!orders.data.length ? <PageState title="Chưa có đơn hàng" /> : <div className="order-list">{[...orders.data].sort((a, b) => b.orderDate.localeCompare(a.orderDate)).slice(0, 5).map((order) => <article key={order.orderNumber} className="order-row"><div className="order-row-header"><div><p className="order-number">{order.orderNumber}</p><p className="text-sm muted mt-2">{formatDate(order.orderDate)}</p></div><div><p>{getOrderStatusMeta(order.status).label}</p><p className="mt-2">{formatMoney(order.totalPrice)}</p></div></div></article>)}</div>}
+      </>}
+  </section>;
 }

@@ -1,145 +1,97 @@
-# High-Concurrency Ecommerce Frontend
+# Flash Store — Ecommerce Frontend
 
-> Giao diện Next.js cho hệ thống **High-Concurrency Ecommerce Microservices Backend**, phục vụ thao tác mua hàng, quản trị và quan sát kết quả của các luồng checkout.
+Giao diện Next.js cho hệ thống Ecommerce Microservices. Frontend phục vụ mua hàng, quản trị và theo dõi xử lý đơn bất đồng bộ; benchmark đồng thời vẫn dùng JMeter trong backend.
 
-Frontend này là giao diện đi kèm backend [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-.git). Trọng tâm của toàn bộ project nằm ở xử lý checkout đồng thời, kiểm soát oversell và đánh giá backend dưới tải cao.
+Batch 2 làm việc trên `batch2-frontend`, đối chiếu API của backend `project1-recovery`. Xem [hợp đồng API](docs/API_CONTRACT.md) và [báo cáo Batch 2](docs/BATCH2_REPORT.md).
 
-> **Lưu ý:** frontend không phải công cụ tạo tải benchmark. Các kịch bản tải đồng thời được chạy bằng **JMeter** ở backend repo. Frontend chủ yếu dùng để thao tác thủ công, kiểm tra dữ liệu và quan sát kết quả sau khi hệ thống xử lý.
+## Chức năng
 
-## Chức năng chính
+- Danh mục từ API thật; tìm kiếm, lọc, sắp xếp và phân trang phía server.
+- Chi tiết sản phẩm, màu/kích cỡ, ảnh theo biến thể và tồn kho thật.
+- Đăng ký/đăng nhập, hồ sơ và CRUD địa chỉ/default.
+- Giỏ hàng của tài khoản trên backend; danh sách yêu thích lưu trên trình duyệt.
+- Checkout có địa chỉ, COD/VNPay, khóa idempotency và giữ giỏ sau HTTP 202.
+- Theo dõi đơn bằng API, STOMP được xác thực và polling có giới hạn.
+- Admin: danh mục/biến thể/ảnh Cloudinary, điều chỉnh kho bất đồng bộ, đơn và trạng thái người dùng.
 
-### Khách hàng
+Next.js 16.0.3, React 19.2, TypeScript, Ant Design, Tailwind, Axios, React Query, Zustand và SockJS/STOMP được giữ lại. Playwright chỉ là dependency phát triển.
 
-- Xem danh sách sản phẩm và lọc theo từ khóa, danh mục.
-- Xem chi tiết sản phẩm, chọn màu, size và kiểm tra tồn kho theo biến thể.
-- Đăng ký, đăng nhập tài khoản.
-- Thêm sản phẩm vào giỏ hàng, chỉnh số lượng, đặt hàng và hủy đơn.
-- Chọn địa chỉ giao hàng trước khi tạo đơn.
-- Chọn phương thức thanh toán COD hoặc VNPay khi đặt hàng.
-- Theo dõi trạng thái đơn hàng qua trang đơn hàng và màn hình chờ xử lý.
-- Nhận cập nhật trạng thái đơn hàng theo thời gian thực qua WebSocket.
+## Chạy local
 
-### Admin
-
-- Xem dashboard tổng quan với số lượng người dùng, đơn hàng và doanh thu trong ngày.
-- Xem danh sách sản phẩm.
-- Tạo sản phẩm mới với biến thể theo màu, size, giá, số lượng ban đầu và hình ảnh.
-- Chỉnh sửa hoặc xóa sản phẩm và biến thể.
-- Xem danh sách và chi tiết đơn hàng.
-- Xem danh sách người dùng.
-- Khóa hoặc mở khóa tài khoản người dùng.
-
-## Công nghệ sử dụng
-
-| Nhóm | Công nghệ |
-|---|---|
-| Framework | Next.js 16, React 19 |
-| Ngôn ngữ | TypeScript |
-| UI | Ant Design |
-| Data fetching | Axios, TanStack Query |
-| State management | Zustand |
-| Realtime | SockJS, STOMP |
-
-## Cấu trúc chính
-
-```text
-src/
-├─ app/                # các trang chính
-├─ components/         # component giao diện
-├─ services/           # gọi API
-├─ lib/                # axios, helper
-├─ store/              # state management
-└─ types/              # kiểu dữ liệu
-```
-
-## Các màn hình chính
-
-### Trang sản phẩm
-
-<img src="screenshots/products.png" alt="Product listing page" width="1135">
-
-### Trang chi tiết sản phẩm
-
-<img src="screenshots/ProductDetail.png" alt="Product detail page" width="845">
-
-### Trang giỏ hàng
-
-<img src="screenshots/Cart.png" alt="Shopping cart page" width="848">
-
-### Trang đặt hàng
-
-<img src="screenshots/Checkout.png" alt="Checkout page" width="855">
-
-### Trang đơn hàng của người dùng
-
-<img src="screenshots/MyOrders.png" alt="User order history page" width="853">
-
-### Trang Admin
-
-<img src="screenshots/Admin.png" alt="Admin dashboard" width="1899">
-
-## Yêu cầu môi trường
-
-- Node.js 20+
-- npm 10+
-- Backend API chạy tại `http://localhost:8000`
-- WebSocket server chạy tại `http://localhost:8087/ws`
-
-## Cách chạy local
-
-### 1. Clone project
+Cần Node.js **20.9+**, npm và backend Batch 1 đã chạy. Môi trường kiểm thử Batch 2 dùng Node 24.19.0 / npm 11.9.0.
 
 ```bash
-git clone https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
+git clone --branch batch2-frontend https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
 cd ecommerce-frontend-1-
-```
-
-### 2. Cài dependencies
-
-```bash
-npm install
-```
-
-### 3. Tạo file môi trường
-
-Tạo file `.env.local`:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_URL=http://localhost:8087/ws
-```
-
-### 4. Chạy frontend
-
-```bash
+npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
-Frontend mặc định chạy tại:
+Mở **http://localhost:3001**. Nội dung `.env.local` tối thiểu:
 
-```text
-http://localhost:3001
+```dotenv
+API_URL=http://localhost:8080
+NEXT_PUBLIC_WS_URL=http://localhost:8080/ws
 ```
 
-Backend cần được khởi động trước để frontend có thể gọi API và nhận cập nhật trạng thái đơn hàng qua WebSocket.
+- Gateway mặc định là **8080**, đã đối chiếu cấu hình backend. Cấu hình cũ **8000** chỉ dùng khi bạn chủ động đặt `API_URL` cho một reverse proxy đang chạy.
+- Browser gọi cùng origin `/api` và `/auth`; Next chuyển tiếp đến `API_URL`. Legacy `NEXT_PUBLIC_API_URL` vẫn được hỗ trợ nếu chưa có `API_URL`.
+- SockJS dùng `NEXT_PUBLIC_WS_URL` trực tiếp. HTTP rewrites của Next không proxy WebSocket; origin frontend cần được gateway/notification service cho phép.
+- Đổi môi trường phải khởi động lại Next; biến `NEXT_PUBLIC_*` được đưa vào bundle lúc build.
+- Ảnh Cloudinary và ảnh catalog HTTPS trên `static.nike.com` dùng Next image optimization. URL HTTP(S) hợp lệ ở host khác tải trực tiếp trong browser; URL lỗi dùng placeholder trung tính. `PRODUCT_IMAGE_HOSTS` có thể khai báo các host HTTPS bổ sung cho image optimizer.
+- Không đặt Keycloak client secret, Cloudinary key/secret hoặc VNPay secret vào frontend. Cloudinary cấu hình ở backend.
+- `.env.local` không được commit.
 
-## Liên kết với backend benchmark
+Chạy production local:
 
-Các bài test **single-SKU oversell** và **multi-SKU concurrent ordering** được thực hiện bằng JMeter trong backend repo:
+```bash
+npm run build
+npm run start
+```
 
-[ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-.git)
+Nếu môi trường chặn truy vấn network interfaces của Node, dùng `npm run start -- --hostname 127.0.0.1`.
 
-Frontend có thể được dùng để kiểm tra trạng thái sản phẩm, tồn kho, đơn hàng và các kết quả nghiệp vụ sau khi benchmark hoàn tất.
+## Kiểm tra
 
-## Hạn chế hiện tại
+```bash
+npm run lint
+npm run build
+npx playwright install chromium
+npm test
+```
 
-- Chưa phải một website thương mại điện tử hoàn chỉnh.
-- Giao diện được giữ ở mức đủ dùng để phục vụ luồng mua hàng, quản trị và quan sát kết quả.
-- Trọng tâm kỹ thuật chính của project nằm ở xử lý đồng thời, kiểm soát oversell và benchmark phía backend.
-- Project phù hợp cho chạy local và portfolio/demo hơn là triển khai production ngay.
+Hoặc chạy riêng:
+
+```bash
+npm run test:unit
+npm run test:e2e
+npm run test:responsive
+```
+
+Playwright chạy production build tại port 3001, tự khởi động server nếu cần. Các fixture chỉ nằm trong `tests/`: đó là kiểm thử contract/giao diện độc lập, **không xác minh backend sống**, không phải dữ liệu fallback cho ứng dụng. Responsive kiểm tra 360, 390, 768, 1024 và 1440 px. Trace/screenshot lỗi nằm trong `test-results/` và không được commit. Chromium đã cài sẵn khác có thể được chỉ định bằng `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+## Kiểm tra cùng backend thật
+
+1. Xác nhận `GET http://localhost:8080/api/product` trả array sản phẩm; bật Network và mở `/products`, thử keyword/category/price/color/size/sort/page.
+2. Đăng ký mật khẩu 8–128 ký tự, đăng nhập USER, sửa hồ sơ, tạo/sửa/xóa/default địa chỉ.
+3. Mở `/product/{id}`, chọn SKU có tồn, kiểm tra giới hạn số lượng; thêm vào giỏ rồi kiểm tra API `/api/cart/me`.
+4. Ở `/checkout`, đổi số lượng/xóa dòng, chọn địa chỉ và COD hoặc VNPay. Sau 202, giỏ vẫn còn; theo dõi trạng thái thật ở trang chờ.
+5. COD: xem kết quả xử lý. VNPay: chỉ bắt đầu thanh toán khi đơn VALIDATED; dùng sandbox đã cấu hình, không dùng thông tin thẻ thật trong kiểm thử.
+6. Kiểm tra lịch sử `/orders`, owner-only detail, hủy đơn theo trạng thái cho phép. Đơn COMPLETED có lựa chọn dọn các dòng đã mua; dòng mới hoặc đổi số lượng được giữ.
+7. Đăng nhập ADMIN: dashboard, tạo/sửa/xóa sản phẩm, SKU ổn định, bulk sizes/gallery, upload ảnh, điều chỉnh kho, xem đơn và khóa/mở khóa người dùng khác.
+8. Kiểm tra USER không mở được `/admin`; thử bàn phím, focus, menu/filter drawer và các độ rộng nêu trên.
+9. Xem STOMP CONNECT có header Authorization (không chia sẻ token), và thử tắt notification service để kiểm tra polling/retry.
+10. Xem lỗi thật khi gateway/stock/upload không sẵn sàng; trang hiển thị lỗi và retry, không thay bằng sản phẩm giả.
+
+## Hành vi và giới hạn
+
+Giỏ local cũ không được tự gửi lên backend vì thiếu xác minh SKU/tài khoản; từ Batch 2 cần đăng nhập để thêm vào giỏ. Wishlist chỉ lưu ID trên browser, chưa có API đồng bộ. Checkout dùng `POST /api/order` vì endpoint cart checkout hiện chỉ nhận COD và không mang địa chỉ/VNPay; xem giải thích trong tài liệu API.
+
+COMPLETED mô tả hoàn tất xử lý của backend, không xác nhận giao hàng hay thu tiền COD. Điều chỉnh kho trả queued, chưa phải tồn mới. Dọn giỏ sau đơn là thao tác chủ động, không phải transaction liên thiết bị. Chạy production thực tế và benchmark vẫn cần đánh giá riêng.
+
+Các ảnh trong `screenshots/` là tư liệu giao diện cũ được giữ nguyên, không đại diện Batch 2.
 
 ## Tác giả
 
-- **Tên:** Nguyễn Lâm Trường
-- **Email:** lamtruongnguyen2004@gmail.com
-- **GitHub:** [https://github.com/truongnguyen3006](https://github.com/truongnguyen3006)
+Nguyễn Lâm Trường — [GitHub](https://github.com/truongnguyen3006). Backend: [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-).

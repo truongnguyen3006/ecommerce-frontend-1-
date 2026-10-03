@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 interface CheckoutAttempt {
   fingerprint: string; idempotencyKey: string; orderNumber?: string;
-  items: { skuCode: string; quantity: number }[];
+  items: { skuCode: string; quantity: number; revision?: string }[];
 }
 interface CheckoutState {
   attempts: Record<string, CheckoutAttempt>;

@@ -8,8 +8,8 @@ export interface KeycloakTokenResponse { access_token: string; refresh_token: st
 export const authApi = {
   login: async (data: LoginRequest): Promise<KeycloakTokenResponse> =>
     (await authTransport.post<KeycloakTokenResponse>('/auth/login', data)).data,
-  register: async (data: RegisterRequest): Promise<UserProfile> =>
-    (await authTransport.post<UserProfile>('/auth/register', data)).data,
+  register: async (data: RegisterRequest, idempotencyKey: string): Promise<UserProfile> =>
+    (await authTransport.post<UserProfile>('/auth/register', data, {headers: {'Idempotency-Key': idempotencyKey}})).data,
   getMe: (): Promise<UserProfile> => axiosClient.get<UserProfile, UserProfile>('/api/user/me'),
   updateProfile: (data: UpdateProfileRequest): Promise<UserProfile> => axiosClient.patch<UserProfile, UserProfile>('/api/user/me', data),
   logout: async (): Promise<void> => {

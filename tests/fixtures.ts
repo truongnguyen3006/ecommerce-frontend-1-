@@ -17,7 +17,7 @@ export async function signIn(page: Page, role: Role = 'user') {
   }, { role, token: fixtureToken(role) });
 }
 export const makeProducts = (): Product[] => Array.from({ length: 14 }, (_, index) => ({
-  id: index + 1, name: 'Sản phẩm kiểm thử ' + String(index + 1).padStart(2, '0'), description: 'Mô tả từ fixture kiểm thử contract.',
+  id: index + 1, revision: 0, name: 'Sản phẩm kiểm thử ' + String(index + 1).padStart(2, '0'), description: 'Mô tả từ fixture kiểm thử contract.',
   category: index % 2 ? 'Phụ kiện' : 'Giày', price: 100000 + index * 10000, imageUrl: '/product-placeholder.svg',
   variants: [
     { skuCode: 'FIXTURE-' + (index + 1) + '-BLACK-40', color: 'Đen', size: '40', price: 100000 + index * 10000, imageUrl: '/product-placeholder.svg', galleryImages: ['/product-placeholder.svg'], isActive: true },
@@ -34,7 +34,7 @@ export interface RequestRecord { path: string; method: string; body: unknown; id
 export async function mockBackend(page: Page, options: { role?: Role; terminal?: OrderStatus; initialOrder?: OrderResponse; emptyCart?: boolean; paymentState?: string } = {}) {
   const actor = options.role || 'user';
   const products = makeProducts();
-  const cart: Cart = { userId: actor + '-fixture', items: options.emptyCart ? [] : [{ skuCode: 'FIXTURE-1-BLACK-40', quantity: 1, productName: products[0].name, price: 100000, imageUrl: '/product-placeholder.svg' }] };
+  const cart: Cart = { userId: actor + '-fixture', items: options.emptyCart ? [] : [{ skuCode: 'FIXTURE-1-BLACK-40', quantity: 1, revision: 'snapshot-1', productName: products[0].name, price: 100000, imageUrl: '/product-placeholder.svg' }] };
   let addresses: UserAddress[] = [{ id: 1, label: 'Nhà riêng', recipientName: 'Khách kiểm thử', recipientPhone: '0900000000', addressLine: 'Địa chỉ kiểm thử', isDefault: true }];
   const users = [
     { id: 1, keycloakId: 'admin-fixture', fullName: 'Quản trị kiểm thử', email: 'admin@example.test', phoneNumber: '', address: '', status: true, roles: ['ADMIN'] },
@@ -71,20 +71,28 @@ export async function mockBackend(page: Page, options: { role?: Role; terminal?:
       return respond({ content: result.slice(page * size, (page + 1) * size), page, size, totalElements: result.length, totalPages: Math.ceil(result.length / size) });
     }
     if (path === '/api/product' && method === 'GET') return respond(products);
-    if (path === '/api/product' && method === 'POST') return respond({ id: 100, ...body, price: body.basePrice }, 201);
+    if (path === '/api/product' && method === 'POST') return respond({ id: 100, ...body, revision: 0, price: body.basePrice }, 201);
     if (path.startsWith('/api/product/sku/')) return variant(path.split('/').pop()!) ? respond(variant(path.split('/').pop()!)) : respond({ code: 'NOT_FOUND' }, 404);
     if (/^\/api\/product\/\d+$/.test(path)) {
       const product = products.find((item) => item.id === Number(path.split('/').pop()));
       if (!product) return respond({ code: 'NOT_FOUND' }, 404);
       if (method === 'PUT') {
-        Object.assign(product, body, { price: body.basePrice ?? product.price });
+        if(body.revision!==product.revision) return respond({code:'PRODUCT_REVISION_CONFLICT'},409);
+        Object.assign(product, body, { revision: product.revision+1, price: body.basePrice ?? product.price });
         return respond(product);
       }
       if (method === 'DELETE') { products.splice(products.indexOf(product), 1); return route.fulfill({ status: 204 }); }
       return respond(product);
     }
-    if (path === '/api/inventory/adjust') return respond({ skuCode: body.skuCode, status: 'queued' }, 202);
+    if (path === '/api/inventory/adjust') return respond({ operationId: request.headers()['idempotency-key'], skuCode: body.skuCode, status: 'ACCEPTED' }, 202);
+    if (path.startsWith('/api/inventory/operations/')) return respond({operationId: path.split('/').pop(), status:'APPLIED'});
     if (path.startsWith('/api/inventory/')) return respond({ skuCode: path.split('/').pop(), quantity: path.endsWith('-41') ? 0 : 3 });
+    if (path === '/api/cart/purchased') {
+      const items=body.items as {skuCode:string;quantity:number;revision?:string}[];
+      let removed=0;
+      cart.items=cart.items.filter(line => {const match=items.some(item => item.skuCode===line.skuCode && item.quantity===line.quantity && item.revision && item.revision===line.revision);if(match) removed++;return !match;});
+      return respond({removed});
+    }
     if (path === '/api/cart/me') {
       if (method === 'DELETE') { cart.items = []; return route.fulfill({ status: 204 }); }
       return respond(cart);
@@ -94,7 +102,7 @@ export async function mockBackend(page: Page, options: { role?: Role; terminal?:
       if (method === 'DELETE') { cart.items = cart.items.filter((item) => item.skuCode !== sku); return route.fulfill({ status: 204 }); }
       const quantity = Number(body.quantity) + (method === 'POST' ? item?.quantity || 0 : 0);
       if (quantity > 3 || quantity <= 0) return respond({ code: 'CONFLICT' }, 409);
-      if (item) item.quantity = quantity; else cart.items.push({ skuCode: sku, productName: variant(sku)!.name, quantity, price: variant(sku)!.price, imageUrl: '/product-placeholder.svg' });
+      if (item) {item.quantity = quantity;item.revision=crypto.randomUUID();} else cart.items.push({ skuCode: sku, revision:crypto.randomUUID(), productName: variant(sku)!.name, quantity, price: variant(sku)!.price, imageUrl: '/product-placeholder.svg' });
       return respond({});
     }
     if (path === '/api/user/me') {

@@ -1,13 +1,15 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { App, Button, Form, Input, InputNumber, Modal, Select, Switch, Table } from 'antd';
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Product, CreateProductRequest, CreateVariantRequest } from '@/types';
 import { productApi } from '@/services/productApi';
 import { inventoryApi } from '@/services/inventoryApi';
 import { apiErrorMessage } from '@/lib/api-error';
+import { useAuthStore } from '@/store/useAuthStore';
+import { pendingStockOperation, saveStockOperation, finishStockOperation } from '@/lib/stock-operation';
 import { freshAccessToken } from '@/lib/axiosClient';
 import { formatMoney } from '@/lib/format';
 import { validateVariants, skuPart } from '@/lib/product-editor';
@@ -69,18 +71,26 @@ function BulkDialog({ price, saving, onSave, onClose }: { price: number; saving:
     </Form>
   </Modal>;
 }
+function VariantStock({ sku }: { sku: string }) {
+  const stock = useQuery({queryKey:['stock',sku],queryFn:()=>inventoryApi.getStock(sku),staleTime:0});
+  return <span aria-label={`Tồn kho ${sku}`}>{stock.isError ? 'Chưa kiểm tra được' : stock.data?.quantity ?? 'Đang tải…'}</span>;
+}
 export default function ProductEditor({ product }: { product?: Product }) {
   const router = useRouter(), queryClient = useQueryClient(), { message, modal } = App.useApp();
   const [form] = Form.useForm<CreateProductRequest>();
+  const owner = useAuthStore((state) => state.user?.keycloakId) || '';
+  const editRevision = useRef(product?.revision);
   const [draftVariants, setDraftVariants] = useState<VariantDraft[]>([]);
   const [variantEditor, setVariantEditor] = useState<VariantDraft | 'new' | null>(null), [bulkOpen, setBulkOpen] = useState(false);
   const [adjustSku, setAdjustSku] = useState<string | null>(null), [adjustment, setAdjustment] = useState<number | null>(null);
+  const operation = useRef<{id: string; accepted: boolean} | null>(null), adjustBusy = useRef(false);
+  const [adjustAttempted,setAdjustAttempted] = useState(false);
   const [variantSaving, setVariantSaving] = useState(false);
   const variants: VariantDraft[] = product ? product.variants.map((variant) => ({ ...variant, imageUrl: variant.imageUrl || '', galleryImages: variant.galleryImages || [], price: variant.price ?? product.price, initialQuantity: 0, isActive: variant.isActive !== false })) : draftVariants;
   const watchedName = Form.useWatch('name', form) as string | undefined;
   const watchedImage = Form.useWatch('imageUrl', form) as string | undefined;
   const watchedPrice = Form.useWatch('basePrice', form) as number | undefined;
-  const stocks = useQueries({ queries: product ? variants.map((variant) => ({ queryKey: ['stock', variant.skuCode], queryFn: () => inventoryApi.getStock(variant.skuCode), staleTime: 0 })) : [] });
+
   const invalidate = async () => {
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['catalog'] }), queryClient.invalidateQueries({ queryKey: ['products'] }), queryClient.invalidateQueries({ queryKey: ['product'] }), queryClient.invalidateQueries({ queryKey: ['sku'] })]);
   };
@@ -89,13 +99,13 @@ export default function ProductEditor({ product }: { product?: Product }) {
     if (error) { message.error(error); throw new Error('Invalid variants'); }
     if (!product) { setDraftVariants(next); return; }
     setVariantSaving(true);
-    try { await freshAccessToken(); await productApi.update(product.id, { variants: next }); await invalidate(); }
+    try { await freshAccessToken(); const saved=await productApi.update(product.id, { variants: next, revision: editRevision.current }); editRevision.current=saved.revision; await invalidate(); }
     finally { setVariantSaving(false); }
   };
   const saveGeneral = useMutation({
     mutationFn: async (values: CreateProductRequest) => {
       await freshAccessToken();
-      if (product) return productApi.update(product.id, values);
+      if (product) {const saved=await productApi.update(product.id, { ...values, revision: editRevision.current }); editRevision.current=saved.revision;return saved;}
       if (!variants.length) throw new Error('Missing variants');
       const error = validateVariants(variants);
       if (error) throw new Error(error);
@@ -105,9 +115,27 @@ export default function ProductEditor({ product }: { product?: Product }) {
     onError: (error) => { message.error(!product && !variants.length ? 'Thêm ít nhất một biến thể trước khi lưu.' : apiErrorMessage(error)); },
   });
   const adjust = useMutation({
-    mutationFn: async () => { await freshAccessToken(); return inventoryApi.adjust(adjustSku!, adjustment!); },
-    onSuccess: () => { message.info('Đã gửi điều chỉnh kho. Kiểm tra lại tồn kho sau khi hệ thống xử lý.'); setAdjustSku(null); setAdjustment(null); void queryClient.invalidateQueries({ queryKey: ['stock'] }); },
+    mutationFn: async () => {
+      await freshAccessToken();
+      const current=operation.current!;
+      saveStockOperation(owner,adjustSku!,{...current,quantity:adjustment!});
+      let result=current.accepted ? await inventoryApi.operation(current.id) : await inventoryApi.adjust(adjustSku!,adjustment!,current.id);
+      current.accepted=true;
+      saveStockOperation(owner,adjustSku!,{...current,quantity:adjustment!});
+      for (let i=0;i<20 && ['ACCEPTED','PENDING'].includes(result.status);i++) {
+        if(i>0) await new Promise((resolve) => setTimeout(resolve,1500));
+        result=await inventoryApi.operation(current.id);
+      }
+      if(result.skuCode && (result.skuCode!==adjustSku || result.adjustmentQuantity!==adjustment)) throw new Error('Operation result does not match this adjustment');
+      return result;
+    },
+    onSuccess: (result) => {
+      if(result.status==='APPLIED') {finishStockOperation(owner,adjustSku!);message.success('Đã áp dụng điều chỉnh kho.');setAdjustSku(null);setAdjustment(null);setAdjustAttempted(false);void queryClient.invalidateQueries({queryKey:['stock']});}
+      else if(result.status==='REJECTED') {finishStockOperation(owner,adjustSku!);message.error('Điều chỉnh bị từ chối. Tồn kho không thay đổi.');setAdjustSku(null);setAdjustAttempted(false);}
+      else message.info('Điều chỉnh đang chờ xử lý. Kiểm tra kết quả trước khi gửi thao tác mới.');
+    },
     onError: (error) => message.error(apiErrorMessage(error)),
+    onSettled: () => {adjustBusy.current=false;},
   });
   const variantExists = variantEditor !== null && variantEditor !== 'new';
   return <div><div className="page-heading"><div><Link href="/admin/products" className="text-link text-sm">Danh sách sản phẩm</Link><h1 className="mt-4">{product ? 'Chỉnh sửa sản phẩm' : 'Tạo sản phẩm'}</h1></div></div>
@@ -126,13 +154,13 @@ export default function ProductEditor({ product }: { product?: Product }) {
         <div className="table-wrap"><Table<VariantDraft> dataSource={variants} rowKey="skuCode" pagination={{ pageSize: 8 }} scroll={{ x: 880 }} loading={variantSaving} locale={{ emptyText: 'Chưa có biến thể' }} columns={[
           { title: 'SKU / Biến thể', width: 220, render: (_, variant) => <div><strong>{variant.skuCode}</strong><p className="muted text-sm">{variant.color} / {variant.size}</p></div> },
           { title: 'Giá', dataIndex: 'price', render: (price: number) => formatMoney(price) },
-          { title: product ? 'Tồn khả dụng' : 'Số lượng khởi tạo', render: (_, variant, index) => product ? stocks[index]?.isError ? 'Chưa kiểm tra được' : stocks[index]?.data?.quantity ?? 'Đang tải…' : variant.initialQuantity },
+          { title: product ? 'Tồn khả dụng' : 'Số lượng khởi tạo', render: (_, variant) => product ? <VariantStock sku={variant.skuCode} /> : variant.initialQuantity },
           { title: 'Đang bán', width: 120, render: (_, variant) => <Switch aria-label={`Đang bán ${variant.skuCode}`} checked={variant.isActive} disabled={variantSaving} onChange={(isActive) => {
             void persistVariants(variants.map((item) => item.skuCode === variant.skuCode ? { ...item, isActive } : item)).catch((error) => message.error(apiErrorMessage(error)));
           }} /> },
           { title: 'Thao tác', width: 250, render: (_, variant) => <div className="flex gap-2 flex-wrap">
             <Button aria-label={`Sửa ${variant.skuCode}`} onClick={() => setVariantEditor(variant)}>Sửa</Button>
-            {product && <Button onClick={() => { setAdjustSku(variant.skuCode); setAdjustment(null); }}>Điều chỉnh kho</Button>}
+            {product && <Button onClick={() => { const pending=pendingStockOperation(owner,variant.skuCode);operation.current=pending || {id:crypto.randomUUID(),accepted:false};setAdjustAttempted(Boolean(pending));setAdjustSku(variant.skuCode);setAdjustment(pending?.quantity ?? null); }}>Điều chỉnh kho</Button>}
             <Button onClick={() => modal.confirm({ title: 'Xóa biến thể?', content: `SKU ${variant.skuCode} sẽ bị loại khỏi sản phẩm.`, okText: 'Xóa', cancelText: 'Hủy', onOk: async () => {
               try { await persistVariants(variants.filter((item) => item.skuCode !== variant.skuCode)); } catch (error) { message.error(apiErrorMessage(error)); throw error; }
             } })}>Xóa</Button>
@@ -145,8 +173,8 @@ export default function ProductEditor({ product }: { product?: Product }) {
       await persistVariants(next); setVariantEditor(null);
     }} />}
     {bulkOpen && <BulkDialog price={watchedPrice ?? product?.price ?? 0} saving={variantSaving} onClose={() => setBulkOpen(false)} onSave={async (newVariants) => { await persistVariants([...variants, ...newVariants]); setBulkOpen(false); }} />}
-    <Modal title={`Điều chỉnh kho: ${adjustSku || ''}`} open={Boolean(adjustSku)} onCancel={() => setAdjustSku(null)} onOk={() => adjust.mutate()} confirmLoading={adjust.isPending} okText="Gửi điều chỉnh" cancelText="Hủy" okButtonProps={{ disabled: !adjustment || !Number.isSafeInteger(adjustment) }}>
-      <label className="field mt-6">Số lượng cộng hoặc trừ<InputNumber aria-label="Số lượng điều chỉnh" value={adjustment} onChange={setAdjustment} precision={0} min={-2147483647} max={2147483647} style={{ width: '100%' }} /></label><p className="text-sm muted mt-4">Điều chỉnh được xử lý bất đồng bộ. Tồn kho hiện tại chỉ đổi sau khi hệ thống xử lý xong.</p>
+    <Modal title={`Điều chỉnh kho: ${adjustSku || ''}`} open={Boolean(adjustSku)} onCancel={() => {if(!adjustAttempted) setAdjustSku(null);else message.info('Hãy kiểm tra kết quả của thao tác đang chờ.');}} onOk={() => {if(adjustBusy.current) return;adjustBusy.current=true;setAdjustAttempted(true);adjust.mutate();}} confirmLoading={adjust.isPending} okText={adjustAttempted ? 'Kiểm tra kết quả' : 'Gửi điều chỉnh'} cancelText="Hủy" okButtonProps={{ disabled: !adjustment || !Number.isSafeInteger(adjustment) }}>
+      <label className="field mt-6">Số lượng cộng hoặc trừ<InputNumber aria-label="Số lượng điều chỉnh" disabled={adjustAttempted} value={adjustment} onChange={setAdjustment} precision={0} min={-2147483647} max={2147483647} style={{ width: '100%' }} /></label><p className="text-sm muted mt-4">Điều chỉnh được xử lý bất đồng bộ. Tồn kho hiện tại chỉ đổi sau khi hệ thống xử lý xong.</p>
     </Modal>
   </div>;
 }

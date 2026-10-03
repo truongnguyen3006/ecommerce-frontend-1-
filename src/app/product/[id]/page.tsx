@@ -14,6 +14,7 @@ import ProductImage from '@/components/ui/ProductImage';
 import QuantityStepper from '@/components/ui/QuantityStepper';
 import PageState, { ProductSkeleton } from '@/components/ui/PageState';
 import { formatMoney } from '@/lib/format';
+import { facetLabel, facetKey, facetLabels } from '@/lib/facets';
 import { FALLBACK_IMAGE } from '@/lib/catalog';
 import { apiErrorMessage, httpStatus } from '@/lib/api-error';
 import { freshAccessToken } from '@/lib/axiosClient';
@@ -35,9 +36,9 @@ function ProductDetail({ id }: { id: string }) {
   const query = useQuery({ queryKey: ['product', id], queryFn: () => productApi.getById(id), enabled: /^\d+$/.test(id) });
   const product = query.data;
   const variants = useMemo(() => (product?.variants || []).filter((variant) => variant.isActive !== false), [product?.variants]);
-  const colors = Array.from(new Set(variants.map((variant) => variant.color)));
+  const colors = [...facetLabels(variants.map((variant) => variant.color)), ...(variants.some((variant) => !facetKey(variant.color)) ? [''] : [])];
   const selectedColor = color ?? colors[0];
-  const options = variants.filter((variant) => variant.color === selectedColor);
+  const options = variants.filter((variant) => facetKey(variant.color) === facetKey(selectedColor || ''));
   const stocks = useQueries({ queries: options.map((variant) => ({
     queryKey: ['stock', variant.skuCode], queryFn: () => inventoryApi.getStock(variant.skuCode), staleTime: 15_000,
   })) });
@@ -75,15 +76,15 @@ function ProductDetail({ id }: { id: string }) {
       <div className="price">{formatMoney(currentVariant?.price ?? product.price)}</div>
       {variants.length ? <>
         <fieldset><legend>Màu sắc: {selectedColor || 'Chưa chọn'}</legend><div className="variant-colors">{colors.map((value) => {
-          const variant = variants.find((item) => item.color === value)!;
+          const variant = variants.find((item) => facetKey(item.color) === facetKey(value))!;
           return <button key={value} type="button" aria-pressed={selectedColor === value} aria-label={`Màu ${value || 'không ghi nhãn'}`} onClick={() => { setColor(value); setSku(null); setQuantity(1); setImageIndex(0); }}>
             <div className="product-media"><ProductImage src={variant.imageUrl || product.imageUrl} alt="" sizes="80px" /></div><span>{value || 'Không ghi nhãn'}</span>
           </button>;
         })}</div></fieldset>
         <fieldset><legend>Kích cỡ</legend><div className="variant-sizes">{options.map((variant, index) => <button key={variant.skuCode} type="button"
-          aria-pressed={sku === variant.skuCode} aria-label={`Size ${variant.size}${stocks[index].data?.quantity === 0 ? ' — hết hàng' : ''}`}
+          aria-pressed={sku === variant.skuCode} aria-label={`Size ${facetLabel(variant.size)}${stocks[index].data?.quantity === 0 ? ' — hết hàng' : ''}`}
           disabled={stocks[index].data?.quantity === 0} onClick={() => { setSku(variant.skuCode); setQuantity(1); }}>
-          {variant.size || 'Một cỡ'}{stocks[index].data?.quantity === 0 && <span className="sr-only">Hết hàng</span>}
+          {facetLabel(variant.size) || 'Một cỡ'}{stocks[index].data?.quantity === 0 && <span className="sr-only">Hết hàng</span>}
         </button>)}</div></fieldset>
         <div className="detail-stock" aria-live="polite">{!currentVariant ? 'Chọn kích cỡ để kiểm tra tồn kho.' : stockQuery?.isPending ? 'Đang kiểm tra tồn kho…' :
           stockQuery?.isError ? <><span>Chưa thể kiểm tra tồn kho. </span><button type="button" className="text-link" onClick={() => void stockQuery.refetch()}>Thử lại</button></> :

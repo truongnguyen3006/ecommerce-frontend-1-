@@ -59,7 +59,7 @@ export default function CheckoutPage() {
       };
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-      const key = useCheckoutStore.getState().begin(userId, fingerprint, payload.items);
+      const key = useCheckoutStore.getState().begin(userId, fingerprint, items.map(({skuCode,quantity,revision}) => ({skuCode,quantity,revision})));
       const accepted = await orderApi.placeOrder(payload, key);
       if (!/^[A-Za-z0-9-]{1,64}$/.test(accepted.orderNumber)) throw new Error('Invalid order response');
       useCheckoutStore.getState().accepted(userId, accepted.orderNumber);

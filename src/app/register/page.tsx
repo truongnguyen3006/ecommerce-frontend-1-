@@ -1,24 +1,28 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { App, Button, Form, Input } from 'antd';
 import { authApi, type RegisterRequest } from '@/services/authApi';
-import { apiErrorMessage, httpStatus } from '@/lib/api-error';
+import { apiErrorMessage } from '@/lib/api-error';
 
 export default function RegisterPage() {
   const router = useRouter(), params = useSearchParams();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false), [errorText, setErrorText] = useState('');
+  const attempt = useRef<{body: string; key: string} | null>(null), busy = useRef(false);
   const submit = async (values: RegisterRequest) => {
+    if (busy.current) return; busy.current=true;
     setLoading(true); setErrorText('');
     try {
-      await authApi.register(values);
+      const body=JSON.stringify(values);
+      if (!attempt.current || attempt.current.body!==body) attempt.current={body,key:crypto.randomUUID()};
+      await authApi.register(values,attempt.current.key);
       message.success('Đã tạo tài khoản. Bạn có thể đăng nhập.');
       router.push(`/login${params.get('next') ? '?next=' + encodeURIComponent(params.get('next')!) : ''}`);
     } catch (error) {
-      setErrorText(httpStatus(error) === 409 ? 'Tên đăng nhập hoặc email đã được sử dụng.' : apiErrorMessage(error));
-    } finally { setLoading(false); }
+      setErrorText(apiErrorMessage(error));
+    } finally { busy.current=false;setLoading(false); }
   };
   return <div className="auth-page"><Link href="/" className="auth-brand brand">FLASH<span>STORE</span></Link>
     <section className="auth-form"><h1>Tạo tài khoản</h1><p>Lưu thông tin nhận hàng và theo dõi đơn mua.</p>

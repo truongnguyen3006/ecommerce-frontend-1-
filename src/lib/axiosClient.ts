@@ -18,7 +18,7 @@ export async function refreshAccessToken(): Promise<string> {
   const refresh = typeof window === 'undefined' ? null : sessionStorage.getItem('refresh_token');
   const pending = (async () => {
     try {
-      if (!refresh) throw new Error('Session expired');
+      if (!refresh) { if (token() === previousToken) useAuthStore.getState().logout(); throw new Error('Session expired'); }
       const { data } = await authTransport.post<TokenResponse>('/auth/refresh', { refreshToken: refresh });
       if (!data.access_token || !data.refresh_token) throw new Error('Invalid session response');
       // A late refresh cannot restore an account that logged out or changed.
@@ -27,7 +27,7 @@ export async function refreshAccessToken(): Promise<string> {
       useAuthStore.getState().syncToken(data.access_token);
       return data.access_token;
     } catch (error) {
-      if (token() === previousToken) useAuthStore.getState().logout();
+      if (token() === previousToken && axios.isAxiosError(error) && (error.response?.status === 401 || ['ACCOUNT_DISABLED','AUTH_FORBIDDEN'].includes(error.response?.data?.code))) useAuthStore.getState().logout();
       throw error;
     }
   })();
@@ -66,8 +66,8 @@ axiosClient.interceptors.response.use((response) => response.data, async (error:
     if (!['get', 'head', 'options'].includes((request.method || 'get').toLowerCase())) return Promise.reject(error);
     request.headers.Authorization = `Bearer ${access}`;
     return axiosClient(request);
-  } catch {
-    return Promise.reject(error);
+  } catch (refreshError) {
+    return Promise.reject(refreshError);
   }
 });
 export default axiosClient;

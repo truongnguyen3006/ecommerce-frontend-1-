@@ -137,7 +137,7 @@ test('completed order cleanup preserves changed or newly added cart lines', asyn
   backend.cart.items[0].quantity = 2;
   backend.cart.items.push({ skuCode: 'FIXTURE-2-BLACK-40', quantity: 1, productName: backend.products[1].name, price: backend.products[1].price });
   await page.getByRole('button', { name: 'Xóa sản phẩm đã mua khỏi giỏ' }).click();
-  await expect(page.getByText('Đã xóa sản phẩm đã mua. Các dòng có số lượng thay đổi được giữ lại.')).toBeVisible();
+  await expect(page.getByText('Đã xóa sản phẩm đã mua. Các dòng đã thay đổi được giữ lại.')).toBeVisible();
   expect(backend.cart.items[0].quantity).toBe(2);
   expect(backend.cart.items.map((item) => item.skuCode)).toContain('FIXTURE-2-BLACK-40');
 });
@@ -292,7 +292,7 @@ test('admin image binding, variant identity and queued inventory are preserved',
   await page.getByRole('button', { name: 'Điều chỉnh kho', exact: true }).first().click();
   await page.getByLabel('Số lượng điều chỉnh').fill('2');
   await page.getByRole('button', { name: 'Gửi điều chỉnh', exact: true }).click();
-  await expect(page.getByText('Đã gửi điều chỉnh kho. Kiểm tra lại tồn kho sau khi hệ thống xử lý.')).toBeVisible();
+  await expect(page.getByText('Đã áp dụng điều chỉnh kho.')).toBeVisible();
   expect(backend.records.find((record) => record.path === '/api/inventory/adjust')?.body).toMatchObject({ skuCode: 'FIXTURE-1-BLACK-40', adjustmentQuantity: 2 });
 });
 test('admin bulk sizes retain uploaded variant galleries and multipart fields', async ({ page }) => {
@@ -365,4 +365,35 @@ test('expired payment shows investigation and disables financial actions', async
   await expect(page.getByText('Liên kết thanh toán đã hết hạn.',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Thanh toán VNPay'})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Hủy đơn hàng'})).toHaveCount(0);
+});
+
+test('paginated admin variants display stock by SKU on page two', async ({page}) => {
+  await signIn(page,'admin');const backend=await mockBackend(page,{role:'admin'});
+  backend.products[0].variants=Array.from({length:10},(_,i)=>({...backend.products[0].variants[0],skuCode:`PAGE-SKU-${i+1}`,size:String(i+1)}));
+  await page.route('**/api/inventory/PAGE-SKU-*',async route => {const sku=new URL(route.request().url()).pathname.split('/').pop()!;await route.fulfill({contentType:'application/json',body:JSON.stringify({skuCode:sku,quantity:Number(sku.split('-').pop())*11})});});
+  await page.goto('/admin/products/edit/1');await expect(page.getByLabel('Tồn kho PAGE-SKU-1',{exact:true})).toHaveText('11');
+  await page.locator('.ant-pagination-item-2').click();await expect(page.getByLabel('Tồn kho PAGE-SKU-9',{exact:true})).toHaveText('99');await expect(page.getByLabel('Tồn kho PAGE-SKU-10',{exact:true})).toHaveText('110');
+  await page.goto('/admin/products/edit/2');await expect(page.getByLabel('Tồn kho FIXTURE-2-BLACK-40',{exact:true})).toHaveText('3');
+});
+test('stale admin product edit rejects the replacement and asks for review',async ({page}) => {
+  await signIn(page,'admin');const backend=await mockBackend(page,{role:'admin'});await page.goto('/admin/products/edit/1');
+  await page.getByLabel('Tên sản phẩm',{exact:true}).fill('Stale title');backend.products[0].revision=1;
+  backend.products[0].variants.push({...backend.products[0].variants[0],skuCode:'ADDED-BY-OTHER'});
+  await page.getByRole('button',{name:'Lưu thông tin chung',exact:true}).click();
+  await expect(page.getByText('Sản phẩm đã được người khác thay đổi. Hãy tải lại và xem xét trước khi lưu.')).toBeVisible();
+  expect(backend.products[0].name).not.toBe('Stale title');expect(backend.products[0].variants.map(v=>v.skuCode)).toContain('ADDED-BY-OTHER');
+});
+test('stock adjustment retry after an uncertain response keeps the same operation ID',async ({page}) => {
+  await signIn(page,'admin');await mockBackend(page,{role:'admin'});const ids:string[]=[];
+  await page.route('**/api/inventory/adjust',async route => {ids.push(route.request().headers()['idempotency-key']);await route.fulfill({status:ids.length===1?503:202,contentType:'application/json',body:JSON.stringify(ids.length===1?{code:'SERVICE_UNAVAILABLE'}:{operationId:ids[0],status:'ACCEPTED'})});});
+  await page.goto('/admin/products/edit/1');await page.getByRole('button',{name:'Điều chỉnh kho',exact:true}).first().click();await page.getByLabel('Số lượng điều chỉnh').fill('2');
+  await page.getByRole('button',{name:'Gửi điều chỉnh',exact:true}).click();await expect(page.getByText('Không thể kết nối dịch vụ. Vui lòng thử lại sau.')).toBeVisible();
+  await expect(page.getByLabel('Số lượng điều chỉnh')).toBeDisabled();await page.getByRole('button',{name:'Kiểm tra kết quả',exact:true}).click();
+  await expect(page.getByText('Đã áp dụng điều chỉnh kho.')).toBeVisible();expect(ids).toHaveLength(2);expect(ids[1]).toBe(ids[0]);expect(ids[0]).toMatch(/^[a-f0-9-]{36}$/);
+});
+test('cart cleanup protects a line changed and returned to the same quantity',async ({page}) => {
+  await signIn(page);const backend=await mockBackend(page,{terminal:'COMPLETED'});await page.goto('/checkout');await expect(page.getByRole('button',{name:'Gửi đơn hàng'})).toBeEnabled();await page.getByRole('button',{name:'Gửi đơn hàng'}).click();
+  await page.getByRole('button',{name:'Tải lại trạng thái'}).click();await expect(page.getByRole('heading',{name:'Đã hoàn tất xử lý',exact:true})).toBeVisible();
+  backend.cart.items[0].revision='changed-back-to-one';await page.getByRole('button',{name:'Xóa sản phẩm đã mua khỏi giỏ'}).click();await expect(page.getByText('Đã xóa sản phẩm đã mua. Các dòng đã thay đổi được giữ lại.')).toBeVisible();
+  expect(backend.cart.items).toHaveLength(1);expect(backend.records.filter(r=>r.method==='DELETE'&&r.path.startsWith('/api/cart/items'))).toHaveLength(0);
 });

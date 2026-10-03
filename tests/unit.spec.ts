@@ -10,6 +10,8 @@ import { safeReturnPath } from '../src/lib/auth-navigation';
 import { canCancelOrder, canPayOrder, getOrderTrackingSteps } from '../src/lib/order-status';
 import { validateVariants, skuPart } from '../src/lib/product-editor';
 import { paymentDestination, paymentStateMessage } from '../src/services/paymentApi';
+import { pendingStockOperation, saveStockOperation, finishStockOperation } from '../src/lib/stock-operation';
+import { facetLabels, facetKey } from '../src/lib/facets';
 import { apiErrorMessage } from '../src/lib/api-error';
 import { makeOrder, fixtureToken } from './fixtures';
 
@@ -92,6 +94,16 @@ test.describe('real Axios interceptor with deterministic transport', () => {
     await expect(client.get('/api/user/me')).rejects.toBeInstanceOf(AxiosError);
     expect(refreshes).toBe(1); expect(store.getState().isAuthenticated).toBe(false);
   });
+  test('temporary refresh failure preserves the account and exposes the service error', async () => {
+    transport.defaults.adapter = async (config) => {throw new AxiosError('Temporary outage','ERR_BAD_RESPONSE',config,undefined,response(config,{code:'AUTH_UPSTREAM_UNAVAILABLE'},503));};
+    client.defaults.adapter = async (config) => {throw unauthorized(config);};
+    await expect(client.get('/api/user/me')).rejects.toMatchObject({response:{status:503,data:{code:'AUTH_UPSTREAM_UNAVAILABLE'}}});
+    expect(store.getState().isAuthenticated).toBe(true);expect(sessionStorage.getItem('refresh_token')).toBe('test-only-refresh');
+  });
+  test('disabled account refresh ends the session with its own classification', async () => {
+    transport.defaults.adapter = async (config) => {throw new AxiosError('Disabled','ERR_BAD_REQUEST',config,undefined,response(config,{code:'ACCOUNT_DISABLED'},403));};
+    await expect(refreshAccessToken()).rejects.toMatchObject({response:{status:403}});expect(store.getState().isAuthenticated).toBe(false);
+  });
   test('late refresh cannot restore a logged-out account', async () => {
     let release: () => void = () => {};
     const pending = new Promise<void>((resolve) => { release = resolve; });
@@ -136,4 +148,27 @@ test('expired payment has no automatic retry and investigation protects cancella
 
 test('retired SKU conflict explains permanent identity to admin', () => {
   expect(apiErrorMessage({isAxiosError:true,response:{status:409,data:{code:'SKU_RESERVED'}}})).toContain('không thể tái sử dụng');
+});
+
+test('domain codes select action-specific messages before generic HTTP fallbacks', () => {
+  const message=(status:number,code:string) => apiErrorMessage({isAxiosError:true,response:{status,data:{code,message:'provider-secret'}}});
+  expect(message(409,'UPLOAD_NOT_CONFIGURED')).toContain('tải ảnh');expect(message(409,'PAYMENT_NOT_CONFIGURED')).toContain('VNPay');
+  expect(message(409,'ONLINE_PAYMENT_IN_FLIGHT')).toContain('Đơn chưa thể hủy');expect(message(409,'PRODUCT_REVISION_CONFLICT')).toContain('người khác');
+  expect(message(401,'INVALID_CREDENTIALS')).toContain('mật khẩu');expect(message(403,'ACCOUNT_DISABLED')).toContain('bị khóa');
+  for(const status of [400,401,403,404,409,413,503]) expect(message(status,'UNRECOGNIZED')).not.toContain('provider-secret');
+  expect(message(409,'UNRECOGNIZED')).not.toContain('tồn kho');
+});
+test('facet normalization preserves labels accents and interior spaces while collapsing case duplicates', () => {
+  expect(facetLabels(['  Giày ','giày',' Gi  ày ','Giay'])).toEqual(['Giày','Gi  ày','Giay']);
+  expect(facetKey(' ĐEN ')).toBe('đen');expect(facetKey('Gi  ày')).not.toBe(facetKey('Giày'));
+  expect(parseProductFilters(new URLSearchParams('category=++Giày++&color=+ĐEN+')).filters).toMatchObject({category:'Giày',color:'ĐEN'});
+});
+
+test('pending stock operation survives reload and remains scoped to the account and SKU', () => {
+  installTestStorage();
+  const value={id:'12345678-1234-1234-1234-123456789abc',quantity:2,accepted:true};
+  saveStockOperation('admin-A','SKU',value);expect(pendingStockOperation('admin-A','SKU')).toEqual(value);
+  expect(pendingStockOperation('admin-B','SKU')).toBeNull();expect(pendingStockOperation('admin-A','OTHER')).toBeNull();
+  finishStockOperation('admin-A','SKU');expect(pendingStockOperation('admin-A','SKU')).toBeNull();
+  Reflect.deleteProperty(globalThis,'window');Reflect.deleteProperty(globalThis,'sessionStorage');
 });

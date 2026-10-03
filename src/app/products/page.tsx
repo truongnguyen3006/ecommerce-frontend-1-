@@ -1,4 +1,5 @@
 'use client';
+import { facetLabels } from '@/lib/facets';
 import { useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +19,7 @@ export default function ProductsPage() {
   const params = new URLSearchParams(search.toString());
   const { filters, error } = parseProductFilters(params);
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: productApi.getAll, staleTime: 300_000 });
-  const categories = Array.from(new Set((catalog.data || []).map((product) => product.category).filter((category): category is string => Boolean(category))));
+  const categories = facetLabels((catalog.data || []).map((product) => product.category));
   const query = useQuery({
     queryKey: ['products', filters],
     queryFn: ({ signal }) => productApi.search(filters, signal),

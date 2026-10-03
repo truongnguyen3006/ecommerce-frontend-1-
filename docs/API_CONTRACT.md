@@ -76,3 +76,13 @@ Batch 4 additions: Order responses expose `workflowInvestigationRequired` and `w
 Payment responses expose `expiresAt` and `retryAvailable`. Active URLs are valid for 15 minutes. `EXPIRED_RECONCILIATION_REQUIRED` exposes no payment URL and no automatic retry; expiry does not clear the Order fence. `NOT_CREATED` may advertise retryAvailable for an eligible owner order. Repeated active creation returns the same attempt. Return navigates with `payment=waiting` and never confirms money; the UI reads authenticated service state. IPN records provider notifications using the official acknowledgement codes documented in backend `docs/batch4-correctness.md`.
 
 Catalog SKU codes are permanently reserved. `SKU_RESERVED` (409) means the admin must choose a new code, including for retired/deleted variants. `SKU_IDENTITY_UNAVAILABLE` (503) means the authoritative identity check is temporarily unavailable.
+
+## Batch 5 consistency
+
+Product PUT requires the editor's `revision`; GET/create/update return the new revision. `PRODUCT_REVISION_CONFLICT` means refresh and review before replacement. Facet labels strip outer ASCII spaces and retain accents/case/interior spacing; case-equivalent facet keys collapse in navigation.
+
+Cart GET includes each line's `revision`. Completed-order cleanup sends one `POST /api/cart/purchased` with `{orderNumber, items:[{skuCode,quantity,revision}]}`. The server checks the owned accepted order and conditionally removes unchanged lines atomically. Missing legacy tokens are retained. A 202 order acknowledgement never clears the cart.
+
+Registration carries a stable `Idempotency-Key`; the same body/key resumes a recoverable provisioning intent. `USER_ALREADY_EXISTS` is a proven conflict; `PROVISIONING_RETRY` is incomplete temporary work. Identity outages/configuration failures/disabled accounts do not appear as wrong-password errors. Transient refresh failures preserve the session.
+
+Stock adjustment POST carries `Idempotency-Key`; ACCEPTED/PENDING are acknowledgements only. Admin-only `/api/inventory/operations/{id}` reports APPLIED or REJECTED. The dialog guards double submit, keeps uncertain operation IDs/body in account/SKU-scoped session storage, polls a bounded number of times, and allows a status check with the same ID. A new logical adjustment starts only after the preceding result is resolved.

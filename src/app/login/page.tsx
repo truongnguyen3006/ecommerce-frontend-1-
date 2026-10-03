@@ -7,7 +7,7 @@ import { authApi, type LoginRequest } from '@/services/authApi';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hasAdminRole } from '@/lib/auth';
 import { safeReturnPath } from '@/lib/auth-navigation';
-import { apiErrorMessage, httpStatus } from '@/lib/api-error';
+import { apiErrorMessage } from '@/lib/api-error';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +33,7 @@ export default function LoginPage() {
       router.replace(safeReturnPath(params.get('next'), hasAdminRole(useAuthStore.getState().user?.roles) ? '/admin' : '/'));
     } catch (error) {
       useAuthStore.getState().logout();
-      setErrorText(httpStatus(error) === 401 ? 'Tên đăng nhập hoặc mật khẩu chưa đúng.' : apiErrorMessage(error));
+      setErrorText(apiErrorMessage(error));
     } finally { setLoading(false); }
   };
   return <div className="auth-page"><Link href="/" className="auth-brand brand">FLASH<span>STORE</span></Link>

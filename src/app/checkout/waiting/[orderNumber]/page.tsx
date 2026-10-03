@@ -40,17 +40,11 @@ function TrackedOrder({ orderNumber }: { orderNumber: string }) {
     setClearing(true);
     try {
       await freshAccessToken();
-      const current = await cartApi.getMine();
-      let changed = false;
-      for (const item of receipt?.items || []) {
-        const line = current.items.find((candidate) => candidate.skuCode === item.skuCode);
-        // Retain a line if it changed after submission; never clear new items indiscriminately.
-        if (line?.quantity === item.quantity) await cartApi.remove(item.skuCode);
-        else if (line) changed = true;
-      }
+      const result = await cartApi.cleanupPurchased(orderNumber, receipt?.items || []);
+      const changed = result.removed < (receipt?.items.length || 0);
       useCheckoutStore.getState().finish(userId);
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
-      message.info(changed ? 'Đã xóa sản phẩm đã mua. Các dòng có số lượng thay đổi được giữ lại.' : 'Đã cập nhật giỏ hàng.');
+      message.info(changed ? 'Đã xóa sản phẩm đã mua. Các dòng đã thay đổi được giữ lại.' : 'Đã cập nhật giỏ hàng.');
     } catch (error) { message.error(apiErrorMessage(error)); }
     finally { setClearing(false); }
   };
@@ -69,7 +63,7 @@ function TrackedOrder({ orderNumber }: { orderNumber: string }) {
     </p>}
     {payment.isError && <p className="text-sm mt-6">Chưa tải được thông tin thanh toán. <button type="button" className="text-link" onClick={() => void payment.refetch()}>Thử lại</button></p>}
     <OrderSummary order={order} /><OrderActions order={order} />
-    {order.status === 'COMPLETED' && acceptedHere && <section className="mt-6"><p className="text-sm muted">Sản phẩm đã mua vẫn còn trong giỏ. Bạn có thể xóa các dòng có số lượng khớp với đơn vừa xử lý.</p>
+    {order.status === 'COMPLETED' && acceptedHere && <section className="mt-6"><p className="text-sm muted">Sản phẩm đã mua vẫn còn trong giỏ. Bạn có thể xóa các dòng vẫn giữ nguyên từ lúc gửi đơn.</p>
       <div className="order-actions"><Button type="primary" loading={clearing} onClick={() => void clearPurchased()}>Xóa sản phẩm đã mua khỏi giỏ</Button>
         <Button disabled={clearing} onClick={() => useCheckoutStore.getState().finish(userId)}>Giữ giỏ để mua tiếp</Button>
       </div>

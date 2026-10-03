@@ -1,4 +1,5 @@
 'use client';
+import { facetLabels } from '@/lib/facets';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -21,7 +22,7 @@ export default function Header() {
   const { message } = App.useApp();
   const hidden = pathname.startsWith('/admin') || ['/login', '/register'].includes(pathname);
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: productApi.getAll, staleTime: 300_000, enabled: !hidden });
-  const categories = Array.from(new Set((catalog.data || []).map((product) => product.category).filter((category): category is string => Boolean(category)))).slice(0, 3);
+  const categories = facetLabels((catalog.data || []).map((product) => product.category)).slice(0, 3);
   const links = [{ href: '/products', label: 'Tất cả sản phẩm' }, ...categories.map((category) => ({ href: `/products?category=${encodeURIComponent(category)}`, label: category }))];
   const handleLogout = async () => {
     try { await authApi.logout(); } catch { message.info('Đã đăng xuất trên thiết bị này.'); }

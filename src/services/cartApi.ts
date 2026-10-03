@@ -5,5 +5,7 @@ export const cartApi = {
   add: (skuCode: string, quantity: number): Promise<void> => axiosClient.post<void, void>('/api/cart/items', { skuCode, quantity }),
   update: (skuCode: string, quantity: number): Promise<void> => axiosClient.put<void, void>(`/api/cart/items/${encodeURIComponent(skuCode)}`, { skuCode, quantity }),
   remove: (skuCode: string): Promise<void> => axiosClient.delete<void, void>(`/api/cart/items/${encodeURIComponent(skuCode)}`),
+  cleanupPurchased: (orderNumber: string, items: {skuCode: string; quantity: number; revision?: string}[]): Promise<{removed: number}> =>
+    axiosClient.post<{removed: number},{removed: number}>('/api/cart/purchased', {orderNumber,items}),
   clear: (): Promise<void> => axiosClient.delete<void, void>('/api/cart/me'),
 };

@@ -21,9 +21,9 @@
     "antd": "^5.29.1",
     "axios": "^1.13.2",
     "jwt-decode": "^4.0.0",
-    "next": "16.0.3",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "next": "16.3.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "sockjs-client": "^1.6.1",
     "zustand": "^5.0.8"
   },
@@ -37,7 +37,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "baseline-browser-mapping": "^2.9.7",
     "eslint": "^9",
-    "eslint-config-next": "16.0.3",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

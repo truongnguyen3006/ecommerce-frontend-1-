@@ -13,8 +13,8 @@ export default function CloudinaryUploadButton({ multiple = false, onUploaded, b
   const change = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    if (files.some((file) => !file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) || files.reduce((total, file) => total + file.size, 0) >= 50 * 1024 * 1024) {
-      message.error('Chọn tệp ảnh tối đa 10 MB mỗi tệp, tổng dung lượng dưới 50 MB.'); event.target.value = ''; return;
+    if (files.some((file) => !file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) || files.length > 20 || files.reduce((total, file) => total + file.size, 0) > 48 * 1024 * 1024) {
+      message.error('Chọn tệp ảnh tối đa 10 MB mỗi tệp, tổng tối đa 48 MB và không quá 20 tệp.'); event.target.value = ''; return;
     }
     setUploading(true);
     try {

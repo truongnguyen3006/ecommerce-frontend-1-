@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.env
+.env.*
+playwright-report
+test-results
+**/*.log
+**/.rsync-tmp
+order-status.zip
+PROJECT1_PRODUCTION_READY_FINAL_REPORT.md

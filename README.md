@@ -95,3 +95,7 @@ Các ảnh trong `screenshots/` là tư liệu giao diện cũ được giữ ng
 ## Tác giả
 
 Nguyễn Lâm Trường — [GitHub](https://github.com/truongnguyen3006). Backend: [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-).
+
+## Production-oriented release
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the standalone container, build-time API/SockJS settings, upload envelope and CI/release workflow. Current validation and deferred audit findings are recorded in `PROJECT1_PRODUCTION_READY_FINAL_REPORT.md`. Public deployment and external provider verification remain operator tasks.

@@ -1,0 +1,70 @@
+name: Publish frontend production image
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable release tag (empty uses sha-COMMIT)
+        required: false
+        type: string
+      websocket_url:
+        description: Public HTTPS SockJS endpoint, for example https://shop.yourdomain/ws
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/production-ready-final'
+    runs-on: ubuntu-24.04
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:unit
+      - run: npm run test:e2e
+      - run: npm run test:responsive
+  image:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - name: Validate public build parameters
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          WS_URL: ${{ inputs.websocket_url }}
+        shell: bash
+        run: |
+          tag=${REQUESTED_TAG:-sha-$GITHUB_SHA}
+          [[ "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ && "$tag" != latest ]] || exit 2
+          [[ "$WS_URL" =~ ^https://[a-zA-Z0-9.-]+/ws$ ]] || exit 2
+          printf 'tag=%s\nnamespace=ghcr.io/%s\n' "$tag" "${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          file: Dockerfile
+          build-args: |
+            API_URL=http://api-gateway:8080
+            NEXT_PUBLIC_WS_URL=${{ inputs.websocket_url }}
+          push: true
+          tags: ${{ steps.release.outputs.namespace }}/frontend:${{ steps.release.outputs.tag }}
+          provenance: mode=max
+          sbom: true

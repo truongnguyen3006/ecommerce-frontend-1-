@@ -1,27 +1,18 @@
-import Link from 'next/link';
-import { Empty } from 'antd';
-import { HeartOutlined } from '@ant-design/icons';
-
+'use client';
+import { useQueries } from '@tanstack/react-query';
+import ProductCard from '@/components/ProductCard';
+import PageState, { ProductSkeleton } from '@/components/ui/PageState';
+import { useWishlistStore } from '@/store/useWishlistStore';
+import { productApi } from '@/services/productApi';
 export default function WishlistPage() {
-  return (
-    <div className="app-shell animate-fade-in py-8 md:py-10">
-      <div className="app-surface px-6 py-12 md:px-8">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">Yêu thích</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Danh sách yêu thích</h1>
-          <p className="mt-4 text-sm leading-7 text-[var(--color-secondary)] md:text-base">
-            Danh sách yêu thích đã có giao diện cơ bản để bạn mở rộng tính năng sau này.
-          </p>
-        </div>
-
-        <div className="mt-10 rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-6 py-10">
-          <Empty image={<HeartOutlined className="text-6xl text-[var(--color-muted)]" />} description="Bạn chưa lưu sản phẩm nào">
-            <Link href="/products" className="app-primary-btn">
-              Khám phá sản phẩm
-            </Link>
-          </Empty>
-        </div>
-      </div>
-    </div>
-  );
+  const { ids, toggle, hasHydrated } = useWishlistStore();
+  const queries = useQueries({ queries: ids.map((id) => ({ queryKey: ['product', String(id)], queryFn: () => productApi.getById(id) })) });
+  return <div className="app-shell page"><div className="page-heading"><div><h1>Yêu thích</h1><p>Danh sách được lưu trên trình duyệt này, chưa đồng bộ với tài khoản.</p></div></div>
+    {!hasHydrated ? <ProductSkeleton count={2} /> : !ids.length ? <PageState title="Chưa có sản phẩm yêu thích" description="Lưu sản phẩm từ trang chi tiết để xem lại tại đây." actionHref="/products" actionLabel="Khám phá sản phẩm" /> :
+      <div className="product-grid">{queries.map((query, index) => <div key={ids[index]}>
+        {query.isPending ? <div className="product-media" role="status" aria-label="Đang tải sản phẩm" /> : query.data ? <ProductCard product={query.data} /> :
+          <PageState title="Sản phẩm chưa sẵn sàng" retry={() => void query.refetch()} />}
+        <button type="button" className="text-link text-sm mt-4" aria-label={`Bỏ yêu thích ${query.data?.name || ids[index]}`} onClick={() => toggle(ids[index])}>Bỏ lưu</button>
+      </div>)}</div>}
+  </div>;
 }

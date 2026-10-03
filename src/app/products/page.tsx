@@ -1,128 +1,78 @@
 'use client';
-
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Empty, Input, Select, Skeleton } from 'antd';
+import { Drawer, Pagination } from 'antd';
+import { FilterOutlined } from '@ant-design/icons';
 import ProductCard from '@/components/ProductCard';
+import PageState, { ProductSkeleton } from '@/components/ui/PageState';
 import { productApi } from '@/services/productApi';
-import { Product } from '@/types';
+import { parseProductFilters, SORT_OPTIONS } from '@/lib/product-filters';
+import { apiErrorMessage } from '@/lib/api-error';
 
 export default function ProductsPage() {
-  const searchParams = useSearchParams();
-
-  const initialCategory = searchParams.get('category') || 'Tất cả';
-  const initialKeyword = searchParams.get('q') || '';
-  const pageKey = searchParams.toString();
-
-  return (
-    <ProductsCatalog
-      key={pageKey}
-      initialCategory={initialCategory}
-      initialKeyword={initialKeyword}
-    />
-  );
-}
-
-function ProductsCatalog({
-  initialCategory,
-  initialKeyword,
-}: {
-  initialCategory: string;
-  initialKeyword: string;
-}) {
-  const [keyword, setKeyword] = useState(initialKeyword);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-
-  const { data: products, isLoading } = useQuery<Product[]>({
-    queryKey: ['products-catalog'],
-    queryFn: () => productApi.getAll(),
+  const search = useSearchParams();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState('');
+  const params = new URLSearchParams(search.toString());
+  const { filters, error } = parseProductFilters(params);
+  const catalog = useQuery({ queryKey: ['catalog'], queryFn: productApi.getAll, staleTime: 300_000 });
+  const categories = Array.from(new Set((catalog.data || []).map((product) => product.category).filter((category): category is string => Boolean(category))));
+  const query = useQuery({
+    queryKey: ['products', filters],
+    queryFn: ({ signal }) => productApi.search(filters, signal),
+    enabled: !error,
   });
-
-  const categories = useMemo(() => {
-    const values = Array.from(
-      new Set(
-        (products ?? [])
-          .map((item) => item.category?.trim())
-          .filter(Boolean),
-      ),
-    ) as string[];
-
-    return ['Tất cả', ...values];
-  }, [products]);
-
-  const filteredProducts = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-
-    return (products ?? []).filter((product) => {
-      const matchesCategory =
-        selectedCategory === 'Tất cả' ||
-        product.category?.toLowerCase().includes(selectedCategory.toLowerCase());
-
-      const matchesKeyword =
-        !normalizedKeyword ||
-        product.name.toLowerCase().includes(normalizedKeyword) ||
-        product.description?.toLowerCase().includes(normalizedKeyword) ||
-        product.category?.toLowerCase().includes(normalizedKeyword);
-
-      return matchesCategory && matchesKeyword;
-    });
-  }, [keyword, products, selectedCategory]);
-
-  return (
-    <div className="app-shell animate-fade-in py-8 md:py-10">
-      <div className="app-surface px-6 py-8 md:px-8 md:py-10">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Danh mục sản phẩm
-            </div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-              Tất cả sản phẩm
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--color-secondary)] md:text-base">
-              Tìm kiếm nhanh theo tên sản phẩm, mô tả hoặc danh mục để rút ngắn thời gian ra quyết định mua hàng.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 md:w-[420px] md:flex-row">
-            <Input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="Tìm theo tên sản phẩm"
-              allowClear
-            />
-            <Select
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-              options={categories.map((item) => ({ label: item, value: item }))}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8">
-        {isLoading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="app-surface p-4">
-                <Skeleton.Image active className="!h-[320px] !w-full !rounded-[24px]" />
-                <Skeleton active paragraph={{ rows: 3 }} className="mt-4" />
-              </div>
-            ))}
-          </div>
-        ) : filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        ) : (
-          <div className="app-surface px-6 py-14">
-            <Empty description="Không tìm thấy sản phẩm phù hợp" />
-          </div>
-        )}
+  const navigate = (next: URLSearchParams) => {
+    router.push(`/products${next.size ? '?' + next.toString() : ''}`, { scroll: false });
+    setOpen(false); setFormError('');
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const next = new URLSearchParams();
+    const data = new FormData(event.currentTarget);
+    data.forEach((value, key) => { if (String(value).trim()) next.set(key, String(value).trim()); });
+    if (filters.sort !== 'id,asc') next.set('sort', filters.sort!);
+    const parsed = parseProductFilters(next);
+    if (parsed.error) { setFormError(parsed.error); return; }
+    navigate(next);
+  };
+  const filterForm = <form key={search.toString()} onSubmit={submit} className="filter-form" aria-label="Bộ lọc sản phẩm">
+    <label className="field">Từ khóa<input name="keyword" defaultValue={filters.keyword} placeholder="Tên sản phẩm" maxLength={255} /></label>
+    <label className="field">Danh mục{catalog.isError ? <input name="category" defaultValue={filters.category} placeholder="Nhập danh mục" /> :
+      <select name="category" defaultValue={filters.category || ''}><option value="">Tất cả</option>
+        {filters.category && !categories.includes(filters.category) && <option value={filters.category}>{filters.category}</option>}
+        {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+      </select>}</label>
+    <fieldset><legend>Khoảng giá (đ)</legend><div className="field-pair">
+      <label className="field"><span className="sr-only">Giá tối thiểu</span><input aria-label="Giá tối thiểu" name="minPrice" type="number" min={0} step="any" defaultValue={params.get('minPrice') || ''} placeholder="Từ" /></label>
+      <label className="field"><span className="sr-only">Giá tối đa</span><input aria-label="Giá tối đa" name="maxPrice" type="number" min={0} step="any" defaultValue={params.get('maxPrice') || ''} placeholder="Đến" /></label>
+    </div></fieldset>
+    <label className="field">Màu sắc<input name="color" defaultValue={filters.color} placeholder="Tên màu" maxLength={255} /></label>
+    <label className="field">Kích cỡ<input name="size" defaultValue={filters.size} placeholder="Size" maxLength={255} /></label>
+    {(formError || error) && <p role="alert" className="text-sm">{formError || error}</p>}
+    <button type="submit" className="app-primary-btn">Áp dụng</button>
+    <button type="button" className="text-link text-sm" onClick={() => navigate(new URLSearchParams())}>Xóa bộ lọc</button>
+  </form>;
+  return <div className="app-shell page"><div className="page-heading"><div><div className="eyebrow">Khám phá</div><h1>Sản phẩm</h1></div></div>
+    <div className="catalog-toolbar"><p className="filter-count" aria-live="polite">{query.data ? `${query.data.totalElements} sản phẩm` : query.isFetching ? 'Đang tải…' : 'Danh mục sản phẩm'}</p>
+      <div className="flex items-center gap-4">
+        <button type="button" className="app-secondary-btn mobile-filter-button" aria-label="Lọc" onClick={() => setOpen(true)}><FilterOutlined aria-hidden />Lọc</button>
+        <label className="field"><span className="sr-only">Sắp xếp</span><select aria-label="Sắp xếp" value={filters.sort} onChange={(event) => {
+          const next = new URLSearchParams(search.toString()); next.set('sort', event.target.value); next.delete('page'); navigate(next);
+        }}>{SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       </div>
     </div>
-  );
+    <div className="catalog-layout"><aside className="catalog-sidebar">{filterForm}</aside><section aria-label="Kết quả sản phẩm">
+      {error ? <PageState title="Kiểm tra bộ lọc" description={error} /> : query.isPending ? <ProductSkeleton /> : query.isError ?
+        <PageState title="Chưa thể tải sản phẩm" description={apiErrorMessage(query.error)} retry={() => void query.refetch()} /> :
+        query.data.content.length ? <><div className="product-grid">{query.data.content.map((product) => <ProductCard key={product.id} product={product} />)}</div>
+          <div className="mt-12 flex justify-center"><Pagination current={query.data.page + 1} total={query.data.totalElements} pageSize={query.data.size} showSizeChanger={false} onChange={(page) => {
+            const next = new URLSearchParams(search.toString()); next.set('page', String(page)); navigate(next); window.scrollTo({ top: 0 });
+          }} /></div></> :
+          <PageState title="Không tìm thấy sản phẩm" description="Thử đổi từ khóa hoặc xóa một vài bộ lọc." actionHref="/products" actionLabel="Xem toàn bộ" />}
+    </section></div>
+    <Drawer title="Bộ lọc sản phẩm" width={320} open={open} onClose={() => setOpen(false)} destroyOnHidden>{filterForm}</Drawer>
+  </div>;
 }

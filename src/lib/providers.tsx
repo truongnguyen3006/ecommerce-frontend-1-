@@ -1,79 +1,56 @@
 'use client';
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
-import { App as AntdApp, ConfigProvider, theme } from 'antd';
-import '@ant-design/v5-patch-for-react-19';
+import { App as AntdApp, ConfigProvider } from 'antd';
+import viVN from 'antd/locale/vi_VN';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useCheckoutStore } from '@/store/useCheckoutStore';
+import { useWishlistStore } from '@/store/useWishlistStore';
+import { retryRead } from '@/lib/api-error';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-          },
-        },
-      }),
-  );
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AntdRegistry>
-        <ConfigProvider
-          theme={{
-            algorithm: theme.defaultAlgorithm,
-            token: {
-              colorPrimary: '#111111',
-              colorText: '#111111',
-              colorTextSecondary: '#5f5f5f',
-              colorBorder: '#e7e7e7',
-              colorBgLayout: '#f7f7f7',
-              colorBgContainer: '#ffffff',
-              borderRadius: 18,
-              borderRadiusLG: 24,
-              boxShadowTertiary: '0 8px 30px rgba(17,17,17,0.06)',
-              fontFamily: 'Inter, Helvetica Neue, Helvetica, Arial, sans-serif',
-            },
-            components: {
-              Button: {
-                borderRadius: 999,
-                controlHeight: 44,
-              },
-              Input: {
-                borderRadius: 16,
-                controlHeight: 48,
-              },
-              InputNumber: {
-                borderRadius: 16,
-                controlHeight: 48,
-              },
-              Card: {
-                borderRadiusLG: 24,
-                boxShadowTertiary: '0 8px 30px rgba(17,17,17,0.06)',
-              },
-              Layout: {
-                bodyBg: '#f7f7f7',
-                headerBg: '#ffffff',
-                siderBg: '#ffffff',
-              },
-              Menu: {
-                itemBorderRadius: 14,
-                itemSelectedBg: '#111111',
-                itemSelectedColor: '#ffffff',
-                itemHoverColor: '#111111',
-              },
-              Steps: {
-                colorPrimary: '#111111',
-              },
-            },
-          }}
-        >
-          <AntdApp>{children}</AntdApp>
-        </ConfigProvider>
-      </AntdRegistry>
-    </QueryClientProvider>
-  );
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: retryRead }, mutations: { retry: false } },
+  }));
+  useEffect(() => useAuthStore.subscribe((state, previous) => {
+    if (state.user?.keycloakId !== previous.user?.keycloakId || state.isAuthenticated !== previous.isAuthenticated) {
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    }
+  }), [queryClient]);
+  useEffect(() => {
+    let mounted = true;
+    // The first client render must match SSR. Restore browser state afterward.
+    void (async () => {
+      try {
+        await useCheckoutStore.persist?.rehydrate();
+        await useWishlistStore.persist?.rehydrate();
+        await useAuthStore.persist?.rehydrate();
+      } finally {
+        if (mounted) {
+          useAuthStore.getState().setHasHydrated(true);
+          useWishlistStore.getState().hydrate();
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+  return <QueryClientProvider client={queryClient}><AntdRegistry><ConfigProvider locale={viVN} theme={{
+    token: {
+      colorPrimary: '#111111', colorInfo: '#111111', colorSuccess: '#111111', colorWarning: '#111111', colorError: '#111111',
+      colorText: '#111111', colorTextSecondary: '#707072', colorTextDisabled: '#707072',
+      colorBorder: '#e5e5e5', colorBgLayout: '#ffffff', colorBgContainer: '#ffffff',
+      borderRadius: 0, borderRadiusLG: 0, fontWeightStrong: 500,
+      boxShadow: 'none', boxShadowSecondary: 'none', boxShadowTertiary: 'none',
+      fontFamily: 'Inter, Helvetica Neue, Helvetica, Arial, sans-serif', controlHeight: 44,
+    },
+    components: {
+      Button: { borderRadius: 30, borderRadiusLG: 30, primaryShadow: 'none', dangerShadow: 'none', defaultShadow: 'none' },
+      Menu: { itemBorderRadius: 0, itemSelectedBg: '#f5f5f5', itemSelectedColor: '#111111', itemHoverColor: '#111111' },
+      Input: { activeShadow: 'none', borderRadius: 0 }, InputNumber: { activeShadow: 'none' },
+      Table: { headerBg: '#f5f5f5', borderColor: '#e5e5e5' },
+      Modal: { borderRadiusLG: 0 }, Card: { borderRadiusLG: 0 },
+    },
+  }}><AntdApp>{children}</AntdApp></ConfigProvider></AntdRegistry></QueryClientProvider>;
 }

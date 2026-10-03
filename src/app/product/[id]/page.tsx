@@ -1,431 +1,103 @@
 'use client';
-
 import { useMemo, useState } from 'react';
-import { useQuery, useQueries } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LeftOutlined,
-  RightOutlined,
-} from '@ant-design/icons';
-import { Result, Skeleton, Spin, message } from 'antd';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { App } from 'antd';
+import { HeartOutlined, HeartFilled } from '@ant-design/icons';
 import { productApi } from '@/services/productApi';
 import { inventoryApi } from '@/services/inventoryApi';
-import { useCartStore } from '@/store/useCartStore';
-import { CartItem, Product, ProductVariant } from '@/types';
+import { cartApi } from '@/services/cartApi';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useWishlistStore } from '@/store/useWishlistStore';
+import ProductImage from '@/components/ui/ProductImage';
 import QuantityStepper from '@/components/ui/QuantityStepper';
-
-const FALLBACK_IMAGE = 'https://via.placeholder.com/800x800?text=Product';
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-  }).format(value);
-}
+import PageState, { ProductSkeleton } from '@/components/ui/PageState';
+import { formatMoney } from '@/lib/format';
+import { FALLBACK_IMAGE } from '@/lib/catalog';
+import { apiErrorMessage, httpStatus } from '@/lib/api-error';
+import { freshAccessToken } from '@/lib/axiosClient';
 
 export default function ProductDetailPage() {
-  const params = useParams();
-  const productId = params.id as string;
-
-  return <ProductDetailContent key={productId} productId={productId} />;
+  const { id } = useParams<{ id: string }>();
+  return <ProductDetail key={id} id={id} />;
 }
-
-function ProductDetailContent({ productId }: { productId: string }) {
-  const addToCart = useCartStore((state) => state.addToCart);
-
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [buyQuantity, setBuyQuantity] = useState(1);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
-  const { data: product, isLoading, isError } = useQuery<Product>({
-    queryKey: ['product', productId],
-    queryFn: () => productApi.getById(productId),
+function ProductDetail({ id }: { id: string }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { message } = App.useApp();
+  const { isAuthenticated } = useAuthStore();
+  const wishlist = useWishlistStore();
+  const [color, setColor] = useState<string | null>(null);
+  const [sku, setSku] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [imageIndex, setImageIndex] = useState(0);
+  const query = useQuery({ queryKey: ['product', id], queryFn: () => productApi.getById(id), enabled: /^\d+$/.test(id) });
+  const product = query.data;
+  const variants = useMemo(() => (product?.variants || []).filter((variant) => variant.isActive !== false), [product?.variants]);
+  const colors = Array.from(new Set(variants.map((variant) => variant.color)));
+  const selectedColor = color ?? colors[0];
+  const options = variants.filter((variant) => variant.color === selectedColor);
+  const stocks = useQueries({ queries: options.map((variant) => ({
+    queryKey: ['stock', variant.skuCode], queryFn: () => inventoryApi.getStock(variant.skuCode), staleTime: 15_000,
+  })) });
+  const currentVariant = options.find((variant) => variant.skuCode === sku);
+  const stockQuery = stocks[options.findIndex((variant) => variant.skuCode === sku)];
+  const stock = stockQuery?.data?.quantity;
+  const safeQuantity = stock !== undefined && stock > 0 ? Math.min(quantity, stock) : quantity;
+  const representative = currentVariant || options[0];
+  const gallery = Array.from(new Set([...(representative?.galleryImages || []), representative?.imageUrl, product?.imageUrl].filter((source): source is string => Boolean(source))));
+  if (!gallery.length) gallery.push(FALLBACK_IMAGE);
+  const add = useMutation({
+    mutationFn: async () => {
+      await freshAccessToken();
+      if (!useAuthStore.getState().isAuthenticated) throw new Error('Session expired');
+      await cartApi.add(currentVariant!.skuCode, safeQuantity);
+    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['cart'] }); message.success('Đã thêm vào giỏ hàng.'); },
+    onError: (error) => {
+      message.error(apiErrorMessage(error));
+      void queryClient.invalidateQueries({ queryKey: ['cart'] });
+      void queryClient.invalidateQueries({ queryKey: ['stock'] });
+    },
   });
-
-  const activeVariants = useMemo(
-    () =>
-      (product?.variants ?? []).filter(
-        (variant) => (variant as ProductVariant & { isActive?: boolean }).isActive !== false,
-      ),
-    [product?.variants],
-  );
-
-  const effectiveSelectedColor = selectedColor ?? activeVariants[0]?.color ?? null;
-
-  const colorVariants = useMemo(() => {
-    const unique = new Map<string, ProductVariant>();
-    activeVariants.forEach((variant) => {
-      if (!unique.has(variant.color)) unique.set(variant.color, variant);
-    });
-    return Array.from(unique.values());
-  }, [activeVariants]);
-
-  const selectedColorVariants = useMemo(
-    () => activeVariants.filter((variant) => variant.color === effectiveSelectedColor),
-    [activeVariants, effectiveSelectedColor],
-  );
-
-  const sizeStocks = useQueries({
-    queries: selectedColorVariants.map((variant) => ({
-      queryKey: ['inventory-stock-by-size', variant.skuCode],
-      queryFn: () => inventoryApi.getStock(variant.skuCode),
-      staleTime: 30_000,
-    })),
-  });
-
-  const sizeOptions = useMemo(
-    () =>
-      selectedColorVariants.map((variant, index) => ({
-        variant,
-        stock: sizeStocks[index]?.data?.quantity,
-        isLoading: sizeStocks[index]?.isLoading ?? false,
-      })),
-    [selectedColorVariants, sizeStocks],
-  );
-
-  const currentVariant = useMemo(
-    () =>
-      activeVariants.find(
-        (variant) =>
-          variant.color === effectiveSelectedColor && variant.size === selectedSize,
-      ) ?? null,
-    [activeVariants, effectiveSelectedColor, selectedSize],
-  );
-
-  const { data: currentInventory, isLoading: isLoadingInventory } = useQuery({
-    queryKey: ['inventory-stock-selected', currentVariant?.skuCode],
-    queryFn: () => inventoryApi.getStock(currentVariant!.skuCode),
-    enabled: Boolean(currentVariant?.skuCode),
-    staleTime: 30_000,
-  });
-
-  const galleryImages = useMemo(() => {
-    const representativeVariant =
-      currentVariant ||
-      activeVariants.find((variant) => variant.color === effectiveSelectedColor) ||
-      activeVariants[0];
-
-    const sources = [
-      ...(representativeVariant?.galleryImages ?? []),
-      representativeVariant?.imageUrl,
-      ...(product?.galleryImages ?? []),
-      product?.imageUrl,
-    ].filter((image): image is string => Boolean(image));
-
-    return Array.from(new Set(sources.length > 0 ? sources : [FALLBACK_IMAGE]));
-  }, [
-    activeVariants,
-    currentVariant,
-    product?.galleryImages,
-    product?.imageUrl,
-    effectiveSelectedColor,
-  ]);
-
-  const safeImageIndex = Math.min(
-    currentImageIndex,
-    Math.max(galleryImages.length - 1, 0),
-  );
-
-  const displayPrice = currentVariant?.price ?? product?.price ?? product?.basePrice ?? 0;
-  const stock = currentInventory?.quantity ?? 0;
-  const isOutOfStock = currentVariant ? stock <= 0 : false;
-  const currentImage =
-    galleryImages[safeImageIndex] || galleryImages[0] || FALLBACK_IMAGE;
-
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % galleryImages.length);
-  };
-
-  const previousImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
-  };
-
-  const handleAddToCart = () => {
-    if (!product) return;
-    if (!selectedSize || !currentVariant) {
-      message.warning('Vui lòng chọn màu và size trước khi thêm vào giỏ hàng.');
-      return;
-    }
-    if (isOutOfStock) {
-      message.error('Biến thể này hiện đã hết hàng.');
-      return;
-    }
-
-    const itemToAdd: CartItem = {
-      id: product.id,
-      skuCode: currentVariant.skuCode,
-      name: product.name,
-      price: currentVariant.price,
-      imageUrl: currentVariant.imageUrl || product.imageUrl || FALLBACK_IMAGE,
-      quantity: buyQuantity,
-      category: product.category,
-      selectedColor: currentVariant.color,
-      selectedSize: currentVariant.size,
-    };
-
-    addToCart(itemToAdd, buyQuantity);
-    message.success(`Đã thêm ${buyQuantity} sản phẩm vào giỏ hàng.`);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="app-shell py-8 md:py-10">
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="app-surface p-6">
-            <Skeleton.Image active className="!h-[520px] !w-full !rounded-[24px]" />
-          </div>
-          <div className="app-surface p-6">
-            <Skeleton active paragraph={{ rows: 10 }} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (
-    isError ||
-    !product ||
-    (product.variants && product.variants.length > 0 && activeVariants.length === 0)
-  ) {
-    return (
-      <div className="app-shell py-10">
-        <div className="app-surface px-6 py-10">
-          <Result
-            status="404"
-            title="Sản phẩm hiện chưa sẵn sàng"
-            subTitle="Biến thể đang tạm ngừng kinh doanh hoặc chưa có đủ dữ liệu hiển thị."
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-shell animate-fade-in py-8 md:py-10">
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="app-surface overflow-hidden p-4 md:p-6">
-          <div className="grid gap-4 lg:grid-cols-[88px_minmax(0,1fr)]">
-            <div className="no-scrollbar hidden max-h-[700px] flex-col gap-3 overflow-y-auto lg:flex">
-              {galleryImages.map((image, index) => (
-                <button
-                  key={`${image}-${index}`}
-                  type="button"
-                  aria-label={`Chọn ảnh ${index + 1}`}
-                  onClick={() => setCurrentImageIndex(index)}
-                  className={`overflow-hidden rounded-[22px] border p-1 transition ${
-                    safeImageIndex === index
-                      ? 'border-[var(--color-primary)] bg-white'
-                      : 'border-transparent bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)]'
-                  }`}
-                >
-                  <img
-                    src={image}
-                    alt={`Thumbnail ${index + 1}`}
-                    className="h-20 w-full rounded-[18px] object-cover"
-                  />
-                </button>
-              ))}
-            </div>
-
-            <div className="relative flex min-h-[420px] items-center justify-center overflow-hidden rounded-[28px] bg-[var(--color-surface-muted)] md:min-h-[620px]">
-              {galleryImages.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={previousImage}
-                    className="app-icon-button absolute left-4 top-1/2 z-10 -translate-y-1/2"
-                    aria-label="Ảnh trước"
-                  >
-                    <LeftOutlined />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextImage}
-                    className="app-icon-button absolute right-4 top-1/2 z-10 -translate-y-1/2"
-                    aria-label="Ảnh tiếp theo"
-                  >
-                    <RightOutlined />
-                  </button>
-                </>
-              )}
-              <img
-                src={currentImage}
-                alt={product.name}
-                className="h-full max-h-[640px] w-full object-contain p-6 transition duration-500 hover:scale-[1.02]"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="app-surface p-6 md:p-8 xl:sticky xl:top-24 xl:h-fit">
-          <div className="flex flex-wrap gap-2">
-            <span className="app-status-pill">{product.category || 'Danh mục đang cập nhật'}</span>
-            <span className="app-status-pill">
-              SKU biến thể: {currentVariant?.skuCode || 'Chưa chọn'}
-            </span>
-          </div>
-
-          <div className="mt-5">
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{product.name}</h1>
-            <div className="mt-3 text-2xl font-semibold text-[var(--color-primary)]">
-              {formatCurrency(displayPrice)}
-            </div>
-            <p className="mt-4 text-sm leading-7 text-[var(--color-secondary)] md:text-base">
-              {product.description?.trim() ||
-                'Sản phẩm phù hợp cho nhu cầu sử dụng hằng ngày với thiết kế gọn gàng và dễ phối.'}
-            </p>
-          </div>
-
-          <div className="mt-8 space-y-6">
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-                  Màu sắc
-                </span>
-                <span className="text-sm font-medium text-[var(--color-primary)]">
-                  {effectiveSelectedColor || 'Chưa chọn'}
-                </span>
-              </div>
-              <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
-                {colorVariants.map((variant) => (
-                  <button
-                    key={variant.skuCode}
-                    type="button"
-                    onClick={() => {
-                      setSelectedColor(variant.color);
-                      setSelectedSize(null);
-                      setBuyQuantity(1);
-                      setCurrentImageIndex(0);
-                    }}
-                    className={`overflow-hidden rounded-[22px] border p-1 transition ${
-                      effectiveSelectedColor === variant.color
-                        ? 'border-[var(--color-primary)] bg-white shadow-[var(--shadow-soft)]'
-                        : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)]'
-                    }`}
-                  >
-                    <img
-                      src={variant.imageUrl || product.imageUrl || FALLBACK_IMAGE}
-                      alt={variant.color}
-                      className="aspect-square w-full rounded-[18px] object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-                  Kích cỡ
-                </span>
-                <span className="text-sm text-[var(--color-secondary)]">
-                  Chọn size để xem tồn kho chính xác
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {sizeOptions.map(({ variant, stock: optionStock, isLoading: isLoadingSize }) => {
-                  const unavailable = typeof optionStock === 'number' && optionStock <= 0;
-                  const isActive = selectedSize === variant.size;
-
-                  return (
-                    <button
-                      key={variant.skuCode}
-                      type="button"
-                      onClick={() => setSelectedSize(variant.size)}
-                      disabled={unavailable}
-                      className={`rounded-[20px] border px-4 py-4 text-left transition ${
-                        isActive
-                          ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                          : 'border-[var(--color-border)] bg-white text-[var(--color-primary)] hover:border-[var(--color-primary)]'
-                      } ${unavailable ? 'cursor-not-allowed opacity-45' : ''}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-base font-semibold">{variant.size}</span>
-                        {isLoadingSize ? <Spin size="small" /> : null}
-                      </div>
-                      <div
-                        className={`mt-1 text-xs ${
-                          isActive ? 'text-white/80' : 'text-[var(--color-secondary)]'
-                        }`}
-                      >
-                        {typeof optionStock === 'number'
-                          ? optionStock > 0
-                            ? `Còn ${optionStock} sản phẩm khả dụng`
-                            : 'Hết hàng'
-                          : 'Đang tải tồn kho'}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--color-muted)]">
-                    Trạng thái
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-sm font-medium">
-                    {currentVariant ? (
-                      isLoadingInventory ? (
-                        <>
-                          <Spin size="small" />
-                          <span>Đang kiểm tra tồn kho…</span>
-                        </>
-                      ) : isOutOfStock ? (
-                        <>
-                          <CloseCircleOutlined className="text-[var(--color-danger)]" />
-                          <span>Biến thể này đã hết hàng</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircleOutlined className="text-[var(--color-success)]" />
-                          <span>Còn {stock} sản phẩm có thể đặt</span>
-                        </>
-                      )
-                    ) : (
-                      <span>Hãy chọn size để xem tồn kho chính xác.</span>
-                    )}
-                  </div>
-                </div>
-                <QuantityStepper
-                  value={buyQuantity}
-                  min={1}
-                  max={currentVariant && stock > 0 ? stock : undefined}
-                  onChange={setBuyQuantity}
-                  disabled={!currentVariant || isOutOfStock}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                className="app-primary-btn flex-1 py-4 text-base"
-                disabled={!currentVariant || isOutOfStock}
-              >
-                {!currentVariant
-                  ? 'Chọn size trước khi thêm giỏ'
-                  : isOutOfStock
-                    ? 'Hết hàng'
-                    : 'Thêm vào giỏ hàng'}
-              </button>
-              <button
-                type="button"
-                onClick={() => message.info('Tính năng yêu thích sẽ sớm được cập nhật.')}
-                className="app-secondary-btn flex-1 py-4 text-base"
-              >
-                Lưu sản phẩm
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
+  if (!/^\d+$/.test(id) || httpStatus(query.error) === 404) return <PageState title="Không tìm thấy sản phẩm" actionHref="/products" actionLabel="Xem sản phẩm" />;
+  if (query.isPending) return <div className="app-shell page"><ProductSkeleton count={2} /></div>;
+  if (query.isError || !product) return <PageState title="Chưa thể tải sản phẩm" description={apiErrorMessage(query.error)} retry={() => void query.refetch()} />;
+  const selectedImage = Math.min(imageIndex, gallery.length - 1);
+  return <div className="app-shell page"><div className="mb-6 text-sm muted"><Link href="/products" className="text-link">Sản phẩm</Link>{product.category && <> / {product.category}</>}</div>
+    <div className="detail-layout"><section className="detail-gallery" aria-label="Ảnh sản phẩm">
+      <div className="gallery-thumbs">{gallery.map((image, index) => <button key={image} type="button" aria-label={`Ảnh ${index + 1}`} aria-pressed={selectedImage === index} onClick={() => setImageIndex(index)}>
+        <ProductImage src={image} alt={`${product.name} — ảnh ${index + 1}`} sizes="80px" />
+      </button>)}</div>
+      <div className="gallery-main"><ProductImage src={gallery[selectedImage]} alt={product.name} priority sizes="(max-width: 767px) 100vw, 55vw" /></div>
+    </section><section className="detail-copy"><h1>{product.name}</h1><p className="muted mt-2">{product.category}</p>
+      <div className="price">{formatMoney(currentVariant?.price ?? product.price)}</div>
+      {variants.length ? <>
+        <fieldset><legend>Màu sắc: {selectedColor || 'Chưa chọn'}</legend><div className="variant-colors">{colors.map((value) => {
+          const variant = variants.find((item) => item.color === value)!;
+          return <button key={value} type="button" aria-pressed={selectedColor === value} aria-label={`Màu ${value || 'không ghi nhãn'}`} onClick={() => { setColor(value); setSku(null); setQuantity(1); setImageIndex(0); }}>
+            <div className="product-media"><ProductImage src={variant.imageUrl || product.imageUrl} alt="" sizes="80px" /></div><span>{value || 'Không ghi nhãn'}</span>
+          </button>;
+        })}</div></fieldset>
+        <fieldset><legend>Kích cỡ</legend><div className="variant-sizes">{options.map((variant, index) => <button key={variant.skuCode} type="button"
+          aria-pressed={sku === variant.skuCode} aria-label={`Size ${variant.size}${stocks[index].data?.quantity === 0 ? ' — hết hàng' : ''}`}
+          disabled={stocks[index].data?.quantity === 0} onClick={() => { setSku(variant.skuCode); setQuantity(1); }}>
+          {variant.size || 'Một cỡ'}{stocks[index].data?.quantity === 0 && <span className="sr-only">Hết hàng</span>}
+        </button>)}</div></fieldset>
+        <div className="detail-stock" aria-live="polite">{!currentVariant ? 'Chọn kích cỡ để kiểm tra tồn kho.' : stockQuery?.isPending ? 'Đang kiểm tra tồn kho…' :
+          stockQuery?.isError ? <><span>Chưa thể kiểm tra tồn kho. </span><button type="button" className="text-link" onClick={() => void stockQuery.refetch()}>Thử lại</button></> :
+          stock === 0 ? 'Hết hàng ở kích cỡ này.' : `Còn ${stock} sản phẩm.`}</div>
+        <div className="mt-4"><QuantityStepper value={safeQuantity} max={stock} onChange={setQuantity} disabled={!stock || add.isPending} /></div>
+      </> : <p className="mt-6">Sản phẩm hiện chưa có biến thể có thể đặt.</p>}
+      <div className="detail-actions"><button type="button" className="app-primary-btn" disabled={!currentVariant || !stock || stockQuery?.isError || add.isPending}
+        onClick={() => isAuthenticated ? add.mutate() : router.push(`/login?next=${encodeURIComponent('/product/' + id)}`)}>
+        {add.isPending ? 'Đang thêm…' : !currentVariant ? 'Chọn kích cỡ' : stock === 0 ? 'Hết hàng' : 'Thêm vào giỏ hàng'}
+      </button><button type="button" className="app-secondary-btn" aria-pressed={wishlist.ids.includes(product.id)} onClick={() => wishlist.toggle(product.id)}>
+        {wishlist.ids.includes(product.id) ? <HeartFilled /> : <HeartOutlined />}{wishlist.ids.includes(product.id) ? 'Đã lưu yêu thích' : 'Lưu yêu thích'}
+      </button></div>
+      <p className="text-xs muted mt-3">Yêu thích được lưu trên trình duyệt này.</p>
+      <section className="detail-description"><h2>Mô tả sản phẩm</h2><p>{product.description?.trim() || 'Chưa có mô tả từ cửa hàng.'}</p></section>
+    </section></div>
+  </div>;
 }

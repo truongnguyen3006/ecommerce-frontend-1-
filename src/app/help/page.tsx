@@ -1,50 +1,10 @@
 import Link from 'next/link';
-
-const helpItems = [
-  {
-    title: 'Thanh toán và đơn hàng',
-    description: 'Theo dõi tiến độ đơn hàng, kiểm tra trạng thái xử lý và các bước tiếp theo.',
-  },
-  {
-    title: 'Tài khoản & hồ sơ',
-    description: 'Quản lý thông tin cá nhân, đăng nhập và cập nhật hồ sơ người dùng.',
-  },
-  {
-    title: 'Sản phẩm & tồn kho',
-    description: 'Cách chọn màu, size, xem biến thể và tình trạng còn hàng.',
-  },
-];
-
 export default function HelpPage() {
-  return (
-    <div className="app-shell animate-fade-in py-8 md:py-10">
-      <div className="app-surface px-6 py-8 md:px-8 md:py-10">
-        <div className="max-w-3xl">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">Trung tâm trợ giúp</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Hỗ trợ nhanh cho quá trình mua sắm</h1>
-          <p className="mt-4 text-sm leading-7 text-[var(--color-secondary)] md:text-base">
-            Khu vực này tập trung những nội dung khách hàng thường tìm nhất khi mua sắm online: đặt hàng, thanh toán, theo dõi đơn và cập nhật tài khoản.
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {helpItems.map((item) => (
-            <div key={item.title} className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-5">
-              <h2 className="text-lg font-semibold">{item.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--color-secondary)]">{item.description}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/products" className="app-primary-btn">
-            Xem sản phẩm
-          </Link>
-          <Link href="/orders" className="app-secondary-btn">
-            Theo dõi đơn hàng
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="app-shell page"><article className="prose"><div className="eyebrow">Trợ giúp</div><h1>Hướng dẫn mua hàng</h1>
+    <section><h2>Chọn sản phẩm</h2><p>Tìm sản phẩm theo từ khóa, danh mục, màu, kích cỡ hoặc khoảng giá. Mở trang chi tiết, chọn kích cỡ còn hàng rồi thêm vào giỏ.</p></section>
+    <section><h2>Đặt hàng</h2><p>Đăng nhập, kiểm tra giỏ, chọn địa chỉ và COD hoặc VNPay. Sau khi gửi đơn, trang theo dõi sẽ cập nhật kết quả kiểm tra tồn kho.</p></section>
+    <section><h2>Thanh toán và hủy đơn</h2><p>VNPay khả dụng khi đơn đã được xác nhận tồn kho. Các thao tác thanh toán hoặc hủy chỉ xuất hiện khi trạng thái đơn cho phép. Nếu đơn xử lý thất bại, giỏ hàng được giữ để bạn kiểm tra lại.</p></section>
+    <section><h2>Quản lý địa chỉ</h2><p>Thêm, sửa hoặc chọn địa chỉ mặc định tại hồ sơ. Đơn đã tạo lưu thông tin người nhận tại thời điểm đặt.</p></section>
+    <div className="flex gap-3 flex-wrap mt-8"><Link href="/profile" className="app-primary-btn">Hồ sơ & địa chỉ</Link><Link href="/orders" className="app-secondary-btn">Xem đơn hàng</Link></div>
+  </article></div>;
 }

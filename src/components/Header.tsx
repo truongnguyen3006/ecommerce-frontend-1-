@@ -1,218 +1,61 @@
 'use client';
-
 import Link from 'next/link';
-import { App as AntdApp, Avatar, Badge, Dropdown, type MenuProps } from 'antd';
-import {
-  HeartOutlined,
-  LogoutOutlined,
-  MenuOutlined,
-  SearchOutlined,
-  ShoppingCartOutlined,
-  ThunderboltFilled,
-  UserOutlined,
-} from '@ant-design/icons';
+import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCartStore } from '@/store/useCartStore';
+import { App, Badge, Drawer, Dropdown, type MenuProps } from 'antd';
+import { HeartOutlined, MenuOutlined, SearchOutlined, ShoppingOutlined, UserOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
+import { authApi } from '@/services/authApi';
+import { productApi } from '@/services/productApi';
 import { hasAdminRole } from '@/lib/auth';
-
-const navigationLinks = [
-  { href: '/products', label: 'Tất cả' },
-  { href: '/products?category=Nam', label: 'Nam' },
-  { href: '/products?category=Nữ', label: 'Nữ' },
-  { href: '/products?category=Trẻ', label: 'Trẻ em' },
-  { href: '/products?featured=sale', label: 'Ưu đãi' },
-];
+import { useCart } from '@/lib/queries';
 
 export default function Header() {
-  const router = useRouter();
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const items = useCartStore((state) => state.items);
-  const { user, isAuthenticated, logout } = useAuthStore();
-  const { message } = AntdApp.useApp();
-
-  const shouldHideHeader = pathname.startsWith('/admin') || pathname === '/login' || pathname === '/register';
-  const cartCount = items.reduce((total, item) => total + item.quantity, 0);
-
-  if (shouldHideHeader) {
-    return null;
-  }
-
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const { user, isAuthenticated } = useAuthStore();
+  const cart = useCart();
+  const [open, setOpen] = useState(false);
+  const { message } = App.useApp();
+  const hidden = pathname.startsWith('/admin') || ['/login', '/register'].includes(pathname);
+  const catalog = useQuery({ queryKey: ['catalog'], queryFn: productApi.getAll, staleTime: 300_000, enabled: !hidden });
+  const categories = Array.from(new Set((catalog.data || []).map((product) => product.category).filter((category): category is string => Boolean(category)))).slice(0, 3);
+  const links = [{ href: '/products', label: 'Tất cả sản phẩm' }, ...categories.map((category) => ({ href: `/products?category=${encodeURIComponent(category)}`, label: category }))];
+  const handleLogout = async () => {
+    try { await authApi.logout(); } catch { message.info('Đã đăng xuất trên thiết bị này.'); }
+    router.push('/');
   };
-
-  const handleCartClick = () => {
-    if (!isAuthenticated) {
-      message.warning('Vui lòng đăng nhập để xem giỏ hàng.');
-      router.push('/login');
-      return;
-    }
-    router.push('/checkout');
-  };
-
   const userMenu: MenuProps['items'] = [
-    {
-      key: 'user-info',
-      label: (
-        <div className="cursor-default px-1 py-1">
-          <div className="text-sm font-semibold text-[var(--color-primary)]">{user?.fullName || user?.username || 'Khách hàng'}</div>
-          <div className="text-xs text-[var(--color-secondary)]">{user?.email || 'Tài khoản thành viên'}</div>
-        </div>
-      ),
-      disabled: true,
-    },
-    { type: 'divider' },
-    {
-      key: 'profile',
-      label: <Link href="/profile">Hồ sơ cá nhân</Link>,
-      icon: <UserOutlined />,
-    },
-    {
-      key: 'orders',
-      label: <Link href="/orders">Đơn hàng của tôi</Link>,
-      icon: <ShoppingCartOutlined />,
-    },
-    ...(hasAdminRole(user?.roles)
-      ? [
-          {
-            key: 'admin',
-            label: <Link href="/admin">Quản trị hệ thống</Link>,
-            icon: <MenuOutlined />,
-          },
-        ]
-      : []),
-    {
-      key: 'logout',
-      label: 'Đăng xuất',
-      icon: <LogoutOutlined />,
-      danger: true,
-      onClick: handleLogout,
-    },
+    { key: 'profile', label: <Link href="/profile">Hồ sơ & địa chỉ</Link> },
+    { key: 'orders', label: <Link href="/orders">Đơn hàng</Link> },
+    ...(hasAdminRole(user?.roles) ? [{ key: 'admin', label: <Link href="/admin">Quản trị</Link> }] : []),
+    { type: 'divider' }, { key: 'logout', label: 'Đăng xuất', onClick: () => void handleLogout() },
   ];
-
-  return (
-    <div className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-white/90 backdrop-blur-xl">
-      <div className="hidden border-b border-[var(--color-border)] bg-[var(--color-surface-muted)] md:block">
-        <div className="app-shell flex h-10 items-center justify-between text-xs font-medium text-[var(--color-secondary)]">
-          <div className="flex items-center gap-4">
-            {!isAuthenticated && (
-              <Link href="/register" className="hover:text-[var(--color-primary)]">
-                Trở thành thành viên
-              </Link>
-            )}
-            <Link href="/help" className="hover:text-[var(--color-primary)]">
-              Trợ giúp
-            </Link>
-            <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[var(--color-primary)]">
-              Miễn phí vận chuyển cho đơn từ 500.000đ
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            {isAuthenticated ? (
-              <span>Xin chào, {user?.fullName || user?.username || 'bạn'}.</span>
-            ) : (
-              <>
-                <Link href="/login" className="hover:text-[var(--color-primary)]">
-                  Đăng nhập
-                </Link>
-                <Link href="/register" className="hover:text-[var(--color-primary)]">
-                  Đăng ký
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
+  if (hidden) return null;
+  const current = (href: string) => pathname === '/products' && (new URLSearchParams(href.split('?')[1]).get('category') || '') === (searchParams.get('category') || '');
+  return <div className="site-header">
+    <div className="utility-nav"><div className="app-shell"><Link href="/help">Trợ giúp</Link>
+      <Link href={isAuthenticated ? '/profile' : '/register'}>{isAuthenticated ? (user?.fullName || user?.username || 'Tài khoản') : 'Tạo tài khoản'}</Link>
+      {!isAuthenticated && <Link href="/login">Đăng nhập</Link>}
+    </div></div>
+    <header className="app-shell main-nav"><Link href="/" className="brand" aria-label="Flash Store — trang chủ">FLASH<span>STORE</span></Link>
+      <nav className="category-nav" aria-label="Danh mục">{links.map((link) => <Link key={link.href} href={link.href} aria-current={current(link.href) ? 'page' : undefined}>{link.label}</Link>)}</nav>
+      <div className="nav-actions">
+        <form action="/products" className="nav-search" role="search"><SearchOutlined aria-hidden /><input name="keyword" aria-label="Tìm sản phẩm" placeholder="Tìm kiếm" /><button type="submit" aria-label="Tìm kiếm" className="sr-only">Tìm</button></form>
+        <Link href="/wishlist" className="app-icon-button" aria-label="Yêu thích"><HeartOutlined /></Link>
+        <Link href="/checkout" className="app-icon-button" aria-label="Giỏ hàng"><Badge count={cart.data?.items.reduce((sum, item) => sum + item.quantity, 0) || 0} size="small"><ShoppingOutlined /></Badge></Link>
+        {isAuthenticated ? <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight"><button className="app-icon-button" type="button" aria-label="Menu tài khoản"><UserOutlined /></button></Dropdown> :
+          <Link href="/login" className="app-icon-button" aria-label="Đăng nhập"><UserOutlined /></Link>}
+        <button type="button" className="app-icon-button mobile-menu-button" aria-label="Mở menu" onClick={() => setOpen(true)}><MenuOutlined /></button>
       </div>
-
-      <header className="app-shell grid h-18 grid-cols-[auto_1fr_auto] items-center gap-3 py-3 md:h-20 md:gap-8">
-        <Link href="/" className="flex items-center gap-2 self-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-[var(--shadow-soft)]">
-            <ThunderboltFilled className="text-xl" />
-          </span>
-          <div className="leading-tight">
-            <div className="text-lg font-black uppercase tracking-[0.22em] md:text-xl">Flash</div>
-            <div className="text-xs font-medium uppercase tracking-[0.28em] text-[var(--color-secondary)]">Store</div>
-          </div>
-        </Link>
-
-        <div className="flex items-center justify-center">
-          <nav className="hidden items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 shadow-[var(--shadow-soft)] lg:flex">
-            {navigationLinks.map((item) => {
-              const activeCategory = new URLSearchParams(item.href.split('?')[1] ?? '').get('category');
-              const currentCategory = searchParams.get('category');
-              const featuredValue = new URLSearchParams(item.href.split('?')[1] ?? '').get('featured');
-              const currentFeatured = searchParams.get('featured');
-              const isActive =
-                item.href === '/products'
-                  ? pathname === '/products' && !currentCategory && !currentFeatured
-                  : pathname.startsWith('/products') && ((activeCategory && activeCategory === currentCategory) || (featuredValue && featuredValue === currentFeatured));
-
-              return (
-                <Link
-                  key={item.href + item.label}
-                  href={item.href}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    isActive ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-primary)] hover:bg-[var(--color-surface-muted)]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navigationLinks.map((item) => (
-              <Link
-                key={item.href + item.label}
-                href={item.href}
-                className="whitespace-nowrap rounded-full border border-[var(--color-border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--color-primary)]"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 md:gap-3">
-          <Link href="/products" aria-label="Tìm sản phẩm" className="app-icon-button hidden md:inline-flex">
-            <SearchOutlined className="text-lg" />
-          </Link>
-          <Link href="/wishlist" aria-label="Danh sách yêu thích" className="app-icon-button hidden md:inline-flex">
-            <HeartOutlined className="text-lg" />
-          </Link>
-          <button type="button" aria-label="Mở giỏ hàng" onClick={handleCartClick} className="app-icon-button relative">
-            <Badge count={cartCount} size="small" offset={[-1, 1]}>
-              <ShoppingCartOutlined className="text-xl" />
-            </Badge>
-          </button>
-
-          {isAuthenticated && user ? (
-            <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight" arrow>
-              <button
-                type="button"
-                aria-label="Mở menu tài khoản"
-                className="ml-1 inline-flex items-center justify-center rounded-full border border-[var(--color-border)] bg-white p-1 shadow-[var(--shadow-soft)] transition hover:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2"
-              >
-                <Avatar className="bg-[var(--color-primary)] text-white" size={40}>
-                  {(user.fullName || user.username || 'U').charAt(0).toUpperCase()}
-                </Avatar>
-              </button>
-            </Dropdown>
-          ) : (
-            <Link href="/login" className="app-primary-btn px-4 py-2 text-xs md:text-sm">
-              Đăng nhập
-            </Link>
-          )}
-
-          <button type="button" className="app-icon-button lg:hidden" aria-label="Mở danh mục" onClick={() => router.push('/products')}>
-            <MenuOutlined className="text-lg" />
-          </button>
-        </div>
-      </header>
-    </div>
-  );
+    </header>
+    <Drawer title="Flash Store" open={open} onClose={() => setOpen(false)} width={320}>
+      <nav className="mobile-links" aria-label="Menu di động" onClick={() => setOpen(false)}>{links.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+        <Link href="/products">Tìm kiếm</Link><Link href="/wishlist">Yêu thích</Link><Link href="/orders">Đơn hàng</Link><Link href="/help">Trợ giúp</Link>
+        {hasAdminRole(user?.roles) && <Link href="/admin">Quản trị</Link>}
+      </nav>
+    </Drawer>
+  </div>;
 }

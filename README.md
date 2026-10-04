@@ -32,71 +32,35 @@ Các điểm chính:
 
 ---
 
-## Screenshots
+## Hình ảnh giao diện
 
-> Phần này đã chừa sẵn vị trí để thêm ảnh.  
-> Gợi ý tạo thư mục `docs/images/`, đặt ảnh theo tên bên dưới rồi bỏ dấu comment của dòng Markdown tương ứng.
+### Trang chủ & danh sách sản phẩm
 
-### Home & Product Catalog
+![Trang chủ và danh sách sản phẩm](docs/images/home-catalog.png)
 
-<!-- Add screenshot: docs/images/home-catalog.png -->
-<!-- ![Home and Product Catalog](docs/images/home-catalog.png) -->
+### Chi tiết sản phẩm
 
-**Nên chụp:** trang Home hoặc Product Listing có header, category, filter/sort và product cards.
+![Chi tiết sản phẩm](docs/images/product-detail.png)
 
----
+### Giỏ hàng & Checkout
 
-### Product Detail
+![Giỏ hàng và Checkout](docs/images/cart-checkout.png)
 
-<!-- Add screenshot: docs/images/product-detail.png -->
-<!-- ![Product Detail](docs/images/product-detail.png) -->
+### Theo dõi đơn hàng
 
-**Nên chụp:** product gallery, variant/color/size selector, price, stock và nút Add to Cart.
+![Theo dõi đơn hàng](docs/images/order-tracking.png)
 
----
+### Admin — Quản lý sản phẩm
 
-### Cart & Checkout
+![Admin quản lý sản phẩm](docs/images/admin-product.png)
 
-<!-- Add screenshot: docs/images/cart-checkout.png -->
-<!-- ![Cart and Checkout](docs/images/cart-checkout.png) -->
+### Admin — Quản lý tồn kho
 
-**Nên chụp:** cart items + quantity hoặc màn hình checkout có địa chỉ và COD/VNPay.
+![Admin quản lý tồn kho](docs/images/admin-inventory.png)
 
----
+### Admin — Quản lý đơn hàng
 
-### Order Tracking / Order History
-
-<!-- Add screenshot: docs/images/order-tracking.png -->
-<!-- ![Order Tracking](docs/images/order-tracking.png) -->
-
-**Nên chụp:** order status, payment status, retry/reconciliation state hoặc order history.
-
----
-
-### Admin — Product Management
-
-<!-- Add screenshot: docs/images/admin-product.png -->
-<!-- ![Admin Product Management](docs/images/admin-product.png) -->
-
-**Nên chụp:** màn hình tạo/sửa product, variants, gallery hoặc Cloudinary upload.
-
----
-
-### Admin — Inventory
-
-<!-- Add screenshot: docs/images/admin-inventory.png -->
-<!-- ![Admin Inventory](docs/images/admin-inventory.png) -->
-
-**Nên chụp:** stock adjustment, operation status hoặc inventory table.
-
----
-
-### Responsive Mobile
-
-<!-- Add screenshot: docs/images/mobile.png -->
-<!-- ![Responsive Mobile UI](docs/images/mobile.png) -->
-
-**Nên chụp:** product listing hoặc checkout ở viewport mobile.
+![Admin quản lý đơn hàng](docs/images/admin-order.png)
 
 ---
 

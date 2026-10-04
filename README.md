@@ -6,7 +6,6 @@ Frontend cho **Project 1 — Ecommerce Microservices**, xây dựng bằng Next.
 
 - **Frontend repository:** `truongnguyen3006/ecommerce-frontend-1-`
 - **Backend repository:** [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-)
-- **Working branch:** `production-ready-final`
 - **Local frontend:** `http://localhost:3001`
 - **Local API Gateway:** `http://localhost:8080`
 
@@ -301,7 +300,7 @@ Image upload được thực hiện qua backend Product Service. Frontend không
 
 Frontend chỉ điều hướng tới payment URL do backend trả về và đọc payment/order state từ API.
 
-Live VNPay Sandbox settlement **chưa được tuyên bố verified** trong repository hiện tại. Khi test sandbox, sử dụng merchant credentials ở backend và không commit hoặc đưa HashSecret vào frontend/log/screenshot.
+Luồng **VNPay Sandbox end-to-end đã được kiểm thử local thành công ngày 2026-10-04**. Đây là xác minh môi trường Sandbox, không phải VNPay production. Không commit hoặc đưa HashSecret vào frontend/log/screenshot.
 
 ---
 
@@ -323,7 +322,7 @@ Project đã có frontend-side support cho:
 - standalone production Docker image;
 - CI build/test/image health validation.
 
-Điều này không đồng nghĩa hệ thống đã được chứng nhận public production. Domain/TLS, live provider verification, real owner environment, dependency/security triage và deployment vẫn là các bước riêng.
+Điều này không đồng nghĩa hệ thống đã được chứng nhận public production. Domain/TLS, VNPay production, owner environment, dependency/security triage và deployment vẫn là các bước riêng.
 
 ---
 
@@ -345,7 +344,8 @@ Production build                PASS
 Standalone container health     PASS
 Backend disposable runtime      PASS
 Public deployment               NOT DONE
-Live VNPay settlement           NOT VERIFIED
+VNPay Sandbox end-to-end       VERIFIED
+Production VNPay                NOT VERIFIED
 ```
 
 ---

@@ -326,16 +326,14 @@ Project đã có frontend-side support cho:
 
 ---
 
-## Related Documentation
+## Tài liệu liên quan
 
-- [API Contract](docs/API_CONTRACT.md)
-- [Batch 6 Validation](docs/BATCH6_VALIDATION.md)
-- [Deployment Guide](DEPLOYMENT.md)
-- [Backend Repository](https://github.com/truongnguyen3006/ecommerce-backend-1-)
+- [Hướng dẫn deployment](DEPLOYMENT.md)
+- [Backend repository](https://github.com/truongnguyen3006/ecommerce-backend-1-/)
 
 ---
 
-## Project Status
+## Trạng thái project
 
 ```text
 Frontend source hardening       PASS

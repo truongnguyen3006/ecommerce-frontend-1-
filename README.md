@@ -1,60 +1,249 @@
 # Flash Store — Ecommerce Frontend
 
-Giao diện Next.js cho hệ thống Ecommerce Microservices. Frontend phục vụ mua hàng, quản trị và theo dõi xử lý đơn bất đồng bộ; benchmark đồng thời vẫn dùng JMeter trong backend.
+Frontend cho **Project 1 — Ecommerce Microservices**, xây dựng bằng Next.js và React. Ứng dụng hỗ trợ luồng mua hàng, quản trị catalog/inventory, theo dõi đơn bất đồng bộ và tích hợp với backend microservices qua API Gateway.
 
-Batch 2 làm việc trên `batch2-frontend`, đối chiếu API của backend `project1-recovery`. Xem [hợp đồng API](docs/API_CONTRACT.md) và [báo cáo Batch 2](docs/BATCH2_REPORT.md).
+> **Trạng thái hiện tại:** production-oriented / production-hardened source & configuration. Chưa tuyên bố public production deployment hoặc live VNPay settlement.
 
-## Chức năng
+- **Frontend repository:** `truongnguyen3006/ecommerce-frontend-1-`
+- **Backend repository:** [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-)
+- **Working branch:** `production-ready-final`
+- **Local frontend:** `http://localhost:3001`
+- **Local API Gateway:** `http://localhost:8080`
 
-- Danh mục từ API thật; tìm kiếm, lọc, sắp xếp và phân trang phía server.
-- Chi tiết sản phẩm, màu/kích cỡ, ảnh theo biến thể và tồn kho thật.
-- Đăng ký/đăng nhập, hồ sơ và CRUD địa chỉ/default.
-- Giỏ hàng của tài khoản trên backend; danh sách yêu thích lưu trên trình duyệt.
-- Checkout có địa chỉ, COD/VNPay, khóa idempotency và giữ giỏ sau HTTP 202.
-- Theo dõi đơn bằng API, STOMP được xác thực và polling có giới hạn.
-- Admin: danh mục/biến thể/ảnh Cloudinary, điều chỉnh kho bất đồng bộ, đơn và trạng thái người dùng.
+---
 
-Next.js 16.0.3, React 19.2, TypeScript, Ant Design, Tailwind, Axios, React Query, Zustand và SockJS/STOMP được giữ lại. Playwright chỉ là dependency phát triển.
+## Overview
 
-## Chạy local
+Flash Store là giao diện cho hệ thống ecommerce theo kiến trúc microservices. Frontend không giả lập business state trong production flow: catalog, stock, cart, order, payment và user state đều lấy từ backend thật.
 
-Cần Node.js **20.9+**, npm và backend Batch 1 đã chạy. Môi trường kiểm thử Batch 2 dùng Node 24.19.0 / npm 11.9.0.
+Các điểm chính:
 
-```bash
-git clone --branch batch2-frontend https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
-cd ecommerce-frontend-1-
-npm ci
-cp .env.example .env.local
-npm run dev
+- Catalog thật với search, filter, sort và pagination phía server.
+- Product detail theo variant/SKU, màu, size, gallery và tồn kho.
+- Đăng ký, đăng nhập, refresh token, logout và profile.
+- CRUD địa chỉ với invariant một default address cho mỗi user.
+- Cart theo tài khoản, cart-line revision và atomic purchased-cart cleanup.
+- Checkout với COD hoặc VNPay.
+- Idempotency cho order placement và admin stock adjustment.
+- Order tracking bằng authenticated STOMP + bounded polling fallback.
+- Payment state hiển thị theo backend authoritative state, không suy đoán từ query string.
+- Admin product/variant management, Cloudinary upload, inventory adjustment, order và user management.
+- Stable domain error codes và UI message mapping.
+- Responsive behavior cho desktop, tablet và mobile.
+
+---
+
+## Screenshots
+
+> Phần này đã chừa sẵn vị trí để thêm ảnh.  
+> Gợi ý tạo thư mục `docs/images/`, đặt ảnh theo tên bên dưới rồi bỏ dấu comment của dòng Markdown tương ứng.
+
+### Home & Product Catalog
+
+<!-- Add screenshot: docs/images/home-catalog.png -->
+<!-- ![Home and Product Catalog](docs/images/home-catalog.png) -->
+
+**Nên chụp:** trang Home hoặc Product Listing có header, category, filter/sort và product cards.
+
+---
+
+### Product Detail
+
+<!-- Add screenshot: docs/images/product-detail.png -->
+<!-- ![Product Detail](docs/images/product-detail.png) -->
+
+**Nên chụp:** product gallery, variant/color/size selector, price, stock và nút Add to Cart.
+
+---
+
+### Cart & Checkout
+
+<!-- Add screenshot: docs/images/cart-checkout.png -->
+<!-- ![Cart and Checkout](docs/images/cart-checkout.png) -->
+
+**Nên chụp:** cart items + quantity hoặc màn hình checkout có địa chỉ và COD/VNPay.
+
+---
+
+### Order Tracking / Order History
+
+<!-- Add screenshot: docs/images/order-tracking.png -->
+<!-- ![Order Tracking](docs/images/order-tracking.png) -->
+
+**Nên chụp:** order status, payment status, retry/reconciliation state hoặc order history.
+
+---
+
+### Admin — Product Management
+
+<!-- Add screenshot: docs/images/admin-product.png -->
+<!-- ![Admin Product Management](docs/images/admin-product.png) -->
+
+**Nên chụp:** màn hình tạo/sửa product, variants, gallery hoặc Cloudinary upload.
+
+---
+
+### Admin — Inventory
+
+<!-- Add screenshot: docs/images/admin-inventory.png -->
+<!-- ![Admin Inventory](docs/images/admin-inventory.png) -->
+
+**Nên chụp:** stock adjustment, operation status hoặc inventory table.
+
+---
+
+### Responsive Mobile
+
+<!-- Add screenshot: docs/images/mobile.png -->
+<!-- ![Responsive Mobile UI](docs/images/mobile.png) -->
+
+**Nên chụp:** product listing hoặc checkout ở viewport mobile.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B[Browser] --> N[Next.js Frontend :3001]
+    N -->|/api & /auth| G[API Gateway :8080]
+    B -->|SockJS / STOMP| G
+
+    G --> U[User Service]
+    G --> P[Product Service]
+    G --> C[Cart Service]
+    G --> O[Order Service]
+    G --> I[Inventory Service]
+    G --> PAY[Payment Service]
+    G --> NOTI[Notification Service]
+
+    U --> K[Keycloak]
+    P --> CL[Cloudinary]
+    PAY --> V[VNPay]
 ```
 
-Mở **http://localhost:3001**. Nội dung `.env.local` tối thiểu:
+Frontend dùng cùng-origin API routes cho `/api` và `/auth`. WebSocket/SockJS sử dụng `NEXT_PUBLIC_WS_URL` và được xác thực bằng bearer token.
+
+---
+
+## Tech Stack
+
+| Area | Technology |
+|---|---|
+| Framework | Next.js 16.3.8 |
+| UI runtime | React 19.2.8 |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS 4 |
+| Component library | Ant Design 5 |
+| Server state | TanStack React Query 5 |
+| Client state | Zustand 5 |
+| HTTP | Axios 1.20 |
+| Realtime | SockJS + STOMP |
+| Testing | Playwright |
+| Container | Standalone Next.js Docker image |
+
+---
+
+## Important Frontend Behaviors
+
+### Authentication
+
+- Access token được gắn vào authenticated API client.
+- Auth endpoints dùng transport riêng để tránh recursive refresh.
+- Concurrent authenticated reads dùng chung một refresh coordinator.
+- Invalid/expired refresh token làm clear session an toàn.
+- Transient Keycloak/provider failure không bị hiển thị sai thành “wrong password”.
+- Mutation không được tự động replay sau refresh.
+
+### Cart
+
+- Cart thuộc về authenticated owner.
+- Mỗi cart line có revision.
+- Purchased-line cleanup kiểm tra SKU + quantity + revision.
+- Dòng mới hoặc đã thay đổi sau checkout không bị xóa nhầm.
+
+### Order & Payment
+
+- Order placement dùng idempotency key.
+- HTTP 202 chỉ là accepted/processing acknowledgment, không phải completion.
+- Browser VNPay Return không được xem là bằng chứng thanh toán.
+- Payment status lấy từ backend.
+- Expired/unresolved VNPay attempt chuyển sang trạng thái reconciliation thay vì tự tạo payment mới không an toàn.
+- Cancellation chịu payment fence để tránh paid + cancelled + restored-stock inconsistency.
+
+### Admin Inventory
+
+- Stock adjustment dùng stable operation ID/idempotency key.
+- UI phân biệt `ACCEPTED/PENDING/APPLIED/REJECTED`.
+- Retry cùng logical operation không được double-adjust stock.
+
+---
+
+## Local Setup
+
+### Requirements
+
+- Node.js **20.9+**
+- npm
+- Backend Project 1 đang chạy
+- API Gateway tại port **8080**
+
+Clone đúng branch hiện tại:
+
+```bash
+git clone --branch production-ready-final https://github.com/truongnguyen3006/ecommerce-frontend-1-.git
+cd ecommerce-frontend-1-
+npm ci
+```
+
+Tạo file `.env.local`:
 
 ```dotenv
 API_URL=http://localhost:8080
 NEXT_PUBLIC_WS_URL=http://localhost:8080/ws
 ```
 
-- Gateway mặc định là **8080**, đã đối chiếu cấu hình backend. Cấu hình cũ **8000** chỉ dùng khi bạn chủ động đặt `API_URL` cho một reverse proxy đang chạy.
-- Browser gọi cùng origin `/api` và `/auth`; Next chuyển tiếp đến `API_URL`. Legacy `NEXT_PUBLIC_API_URL` vẫn được hỗ trợ nếu chưa có `API_URL`.
-- SockJS dùng `NEXT_PUBLIC_WS_URL` trực tiếp. HTTP rewrites của Next không proxy WebSocket; origin frontend cần được gateway/notification service cho phép.
-- Đổi môi trường phải khởi động lại Next; biến `NEXT_PUBLIC_*` được đưa vào bundle lúc build.
-- Ảnh Cloudinary và ảnh catalog HTTPS trên `static.nike.com` dùng Next image optimization. URL HTTP(S) hợp lệ ở host khác tải trực tiếp trong browser; URL lỗi dùng placeholder trung tính. `PRODUCT_IMAGE_HOSTS` có thể khai báo các host HTTPS bổ sung cho image optimizer.
-- Không đặt Keycloak client secret, Cloudinary key/secret hoặc VNPay secret vào frontend. Cloudinary cấu hình ở backend.
-- `.env.local` không được commit.
-
-Chạy production local:
+Sau đó:
 
 ```bash
+npm run dev
+```
+
+Mở:
+
+```text
+http://localhost:3001
+```
+
+### Environment Notes
+
+- Browser gọi `/api` và `/auth` qua Next.js tới `API_URL`.
+- SockJS dùng `NEXT_PUBLIC_WS_URL` trực tiếp.
+- Biến `NEXT_PUBLIC_*` được đưa vào client bundle lúc build, vì vậy đổi biến môi trường cần restart/rebuild.
+- Không đặt Keycloak client secret, Cloudinary secret hoặc VNPay HashSecret trong frontend.
+- `.env.local` không được commit.
+
+---
+
+## Production Build
+
+```bash
+npm ci
+npm run lint
 npm run build
 npm run start
 ```
 
-Nếu môi trường chặn truy vấn network interfaces của Node, dùng `npm run start -- --hostname 127.0.0.1`.
+Frontend production sử dụng standalone Next.js container và đã được validate trong CI.
 
-## Kiểm tra
+---
+
+## Testing
+
+Chạy toàn bộ:
 
 ```bash
+npm ci
 npm run lint
 npm run build
 npx playwright install chromium
@@ -69,33 +258,102 @@ npm run test:e2e
 npm run test:responsive
 ```
 
-Playwright chạy production build tại port 3001, tự khởi động server nếu cần. Các fixture chỉ nằm trong `tests/`: đó là kiểm thử contract/giao diện độc lập, **không xác minh backend sống**, không phải dữ liệu fallback cho ứng dụng. Responsive kiểm tra 360, 390, 768, 1024 và 1440 px. Trace/screenshot lỗi nằm trong `test-results/` và không được commit. Chromium đã cài sẵn khác có thể được chỉ định bằng `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+Checkpoint cuối của `production-ready-final`:
 
-## Kiểm tra cùng backend thật
+| Suite | Result |
+|---|---:|
+| Unit | 20 passed |
+| Flow | 54 passed |
+| Responsive | 5 passed |
+| **Total** | **79 passed** |
+| Lint | PASS |
+| Build | PASS |
+| Standalone image health | PASS |
 
-1. Xác nhận `GET http://localhost:8080/api/product` trả array sản phẩm; bật Network và mở `/products`, thử keyword/category/price/color/size/sort/page.
-2. Đăng ký mật khẩu 8–128 ký tự, đăng nhập USER, sửa hồ sơ, tạo/sửa/xóa/default địa chỉ.
-3. Mở `/product/{id}`, chọn SKU có tồn, kiểm tra giới hạn số lượng; thêm vào giỏ rồi kiểm tra API `/api/cart/me`.
-4. Ở `/checkout`, đổi số lượng/xóa dòng, chọn địa chỉ và COD hoặc VNPay. Sau 202, giỏ vẫn còn; theo dõi trạng thái thật ở trang chờ.
-5. COD: xem kết quả xử lý. VNPay: chỉ bắt đầu thanh toán khi đơn VALIDATED; dùng sandbox đã cấu hình, không dùng thông tin thẻ thật trong kiểm thử.
-6. Kiểm tra lịch sử `/orders`, owner-only detail, hủy đơn theo trạng thái cho phép. Đơn COMPLETED có lựa chọn dọn các dòng đã mua; dòng mới hoặc đổi số lượng được giữ.
-7. Đăng nhập ADMIN: dashboard, tạo/sửa/xóa sản phẩm, SKU ổn định, bulk sizes/gallery, upload ảnh, điều chỉnh kho, xem đơn và khóa/mở khóa người dùng khác.
-8. Kiểm tra USER không mở được `/admin`; thử bàn phím, focus, menu/filter drawer và các độ rộng nêu trên.
-9. Xem STOMP CONNECT có header Authorization (không chia sẻ token), và thử tắt notification service để kiểm tra polling/retry.
-10. Xem lỗi thật khi gateway/stock/upload không sẵn sàng; trang hiển thị lỗi và retry, không thay bằng sản phẩm giả.
+Flow tests gồm desktop và mobile. Responsive checks bao phủ nhiều viewport từ mobile đến desktop.
 
-## Hành vi và giới hạn
+---
 
-Giỏ local cũ không được tự gửi lên backend vì thiếu xác minh SKU/tài khoản; từ Batch 2 cần đăng nhập để thêm vào giỏ. Wishlist chỉ lưu ID trên browser, chưa có API đồng bộ. Checkout dùng `POST /api/order` vì endpoint cart checkout hiện chỉ nhận COD và không mang địa chỉ/VNPay; xem giải thích trong tài liệu API.
+## Suggested Local Smoke Test
 
-COMPLETED mô tả hoàn tất xử lý của backend, không xác nhận giao hàng hay thu tiền COD. Điều chỉnh kho trả queued, chưa phải tồn mới. Dọn giỏ sau đơn là thao tác chủ động, không phải transaction liên thiết bị. Chạy production thực tế và benchmark vẫn cần đánh giá riêng.
+Sau khi frontend + backend chạy:
 
-Các ảnh trong `screenshots/` là tư liệu giao diện cũ được giữ nguyên, không đại diện Batch 2.
+1. Register/Login USER.
+2. Mở catalog, search/filter/sort.
+3. Mở product detail và chọn SKU còn stock.
+4. Add to Cart và thay đổi quantity.
+5. Checkout COD.
+6. Kiểm tra Order History/Detail.
+7. Test VNPay Sandbox bằng một **order mới**.
+8. Login ADMIN và thử product edit + Cloudinary upload.
+9. Thử inventory adjustment và xem final operation status.
+10. Xác nhận USER không truy cập được admin routes và user A không xem được dữ liệu riêng của user B.
 
-## Tác giả
+---
 
-Nguyễn Lâm Trường — [GitHub](https://github.com/truongnguyen3006). Backend: [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-).
+## VNPay & Cloudinary
 
-## Production-oriented release
+### Cloudinary
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the standalone container, build-time API/SockJS settings, upload envelope and CI/release workflow. Current validation and deferred audit findings are recorded in `PROJECT1_PRODUCTION_READY_FINAL_REPORT.md`. Public deployment and external provider verification remain operator tasks.
+Image upload được thực hiện qua backend Product Service. Frontend không giữ API secret.
+
+### VNPay
+
+Frontend chỉ điều hướng tới payment URL do backend trả về và đọc payment/order state từ API.
+
+Live VNPay Sandbox settlement **chưa được tuyên bố verified** trong repository hiện tại. Khi test sandbox, sử dụng merchant credentials ở backend và không commit hoặc đưa HashSecret vào frontend/log/screenshot.
+
+---
+
+## Production-Oriented Hardening
+
+Project đã có frontend-side support cho:
+
+- stable API/domain errors;
+- auth refresh coordination;
+- account-aware cache/session behavior;
+- optimistic product revision conflicts;
+- idempotent checkout;
+- atomic cart cleanup contract;
+- VNPay attempt expiry/reconciliation UI;
+- read-only Return behavior;
+- inventory operation identity/status;
+- authenticated order tracking;
+- responsive UI regression tests;
+- standalone production Docker image;
+- CI build/test/image health validation.
+
+Điều này không đồng nghĩa hệ thống đã được chứng nhận public production. Domain/TLS, live provider verification, real owner environment, dependency/security triage và deployment vẫn là các bước riêng.
+
+---
+
+## Related Documentation
+
+- [API Contract](docs/API_CONTRACT.md)
+- [Batch 6 Validation](docs/BATCH6_VALIDATION.md)
+- [Deployment Guide](DEPLOYMENT.md)
+- [Backend Repository](https://github.com/truongnguyen3006/ecommerce-backend-1-)
+
+---
+
+## Project Status
+
+```text
+Frontend source hardening       PASS
+Frontend automated tests        PASS (79)
+Production build                PASS
+Standalone container health     PASS
+Backend disposable runtime      PASS
+Public deployment               NOT DONE
+Live VNPay settlement           NOT VERIFIED
+```
+
+---
+
+## Author
+
+**Nguyễn Lâm Trường**
+
+- GitHub: [truongnguyen3006](https://github.com/truongnguyen3006)
+- Backend: [ecommerce-backend-1-](https://github.com/truongnguyen3006/ecommerce-backend-1-)
+- Frontend: [ecommerce-frontend-1-](https://github.com/truongnguyen3006/ecommerce-frontend-1-)
